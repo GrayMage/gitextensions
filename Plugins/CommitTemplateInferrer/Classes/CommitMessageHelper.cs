@@ -1,4 +1,5 @@
-﻿using GitCommands;
+﻿using System.IO;
+using GitCommands;
 
 namespace CommitTemplateInferrer.Classes
 {
@@ -16,7 +17,7 @@ namespace CommitTemplateInferrer.Classes
         public string PreviousMessage { get; private set; }
         public string Message { get; private set; }
 
-        public void UpdateMessage()
+        public void UpdateMessage(bool force = false)
         {
             string EnsurePathQuotation(string path)
             {
@@ -25,10 +26,14 @@ namespace CommitTemplateInferrer.Classes
             }
 
             var gitWorkingDir = _gitModule.WorkingDirGitDir.TrimEnd('/', '\\');
+            var commitMsgPath = EnsurePathQuotation($"{gitWorkingDir}\\COMMITMESSAGE");
+
+            if (force)
+                File.Delete(commitMsgPath);
 
             new ShellScript(string.IsNullOrWhiteSpace(_scriptFilePath)
                 ? EnsurePathQuotation($"{gitWorkingDir}\\hooks\\prepare-commit-msg")
-                : EnsurePathQuotation(_scriptFilePath), gitWorkingDir).Execute(EnsurePathQuotation($"{gitWorkingDir}\\COMMITMESSAGE"));
+                : EnsurePathQuotation(_scriptFilePath), gitWorkingDir).Execute(commitMsgPath);
 
             var newMessage = CommitHelper.GetCommitMessage(_gitModule);
             if (PreviousMessage != newMessage)

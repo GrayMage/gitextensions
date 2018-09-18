@@ -51,7 +51,7 @@
 
             resetButton.Click += (sender, args) =>
             {
-                commitMessageHelper.UpdateMessage();
+                commitMessageHelper.UpdateMessage(true);
                 MessageField.Text = commitMessageHelper.Message;
             };
 
