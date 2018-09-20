@@ -9,6 +9,8 @@ namespace CommitTemplateInferrer
 {
     public class CommitTemplateInferrerPlugin : GitPluginBase, IGitPluginForRepository
     {
+        private readonly StringSetting _scriptExecutorPathSetting =
+            new StringSetting("Script executor", "Script executor", string.Empty);
         private readonly StringSetting _scriptFilePathSetting =
             new StringSetting("Script to execute", "Script to execute", string.Empty);
 
@@ -19,6 +21,7 @@ namespace CommitTemplateInferrer
 
         public override IEnumerable<ISetting> GetSettings()
         {
+            yield return _scriptExecutorPathSetting;
             yield return _scriptFilePathSetting;
         }
 
@@ -29,6 +32,7 @@ namespace CommitTemplateInferrer
                 args.Cancel = true;
                 using (var formCommit = new FormCommitWrapper(
                     new GitUICommands(args.GitUICommands.GitModule.WorkingDir),
+                    _scriptExecutorPathSetting.ValueOrDefault(Settings),
                     _scriptFilePathSetting.ValueOrDefault(Settings)))
                 {
                     formCommit.ShowDialog();

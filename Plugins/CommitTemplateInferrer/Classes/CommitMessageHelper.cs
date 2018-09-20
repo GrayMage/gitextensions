@@ -6,12 +6,14 @@ namespace CommitTemplateInferrer.Classes
     public class CommitMessageHelper
     {
         private readonly GitModule _gitModule;
+        private readonly string _scriptExecutorPath;
         private readonly string _scriptFilePath;
 
-        public CommitMessageHelper(GitModule gitModule, string scriptFilePath)
+        public CommitMessageHelper(GitModule gitModule, string scriptExecutorPath, string scriptFilePath)
         {
             _gitModule = gitModule;
             _scriptFilePath = scriptFilePath;
+            _scriptExecutorPath = scriptExecutorPath;
         }
 
         public string PreviousMessage { get; private set; }
@@ -31,15 +33,14 @@ namespace CommitTemplateInferrer.Classes
             if (force)
                 File.Delete(commitMsgPath);
 
-            new ShellScript(string.IsNullOrWhiteSpace(_scriptFilePath)
-                ? EnsurePathQuotation($"{gitWorkingDir}\\hooks\\prepare-commit-msg")
-                : EnsurePathQuotation(_scriptFilePath), gitWorkingDir).Execute(commitMsgPath);
+            new ShellScript(_scriptExecutorPath,
+                    string.IsNullOrWhiteSpace(_scriptFilePath)
+                        ? EnsurePathQuotation($"{gitWorkingDir}\\hooks\\prepare-commit-msg")
+                        : EnsurePathQuotation(_scriptFilePath), gitWorkingDir)
+                .Execute(commitMsgPath);
 
             var newMessage = CommitHelper.GetCommitMessage(_gitModule);
-            if (PreviousMessage != newMessage)
-            {
-                PreviousMessage = Message;
-            }
+            if (PreviousMessage != newMessage) PreviousMessage = Message;
 
             Message = newMessage;
         }

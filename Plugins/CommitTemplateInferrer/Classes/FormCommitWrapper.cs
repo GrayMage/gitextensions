@@ -7,9 +7,9 @@
 
     public class FormCommitWrapper : Wrapper<FormCommit>
     {
-        public FormCommitWrapper(GitUICommands gitUiCommands, string scriptFilePath) : base(new FormCommit(gitUiCommands))
+        public FormCommitWrapper(GitUICommands gitUiCommands, string scriptExecutorPath, string scriptFilePath) : base(new FormCommit(gitUiCommands))
         {
-            var commitMessageHelper = new CommitMessageHelper(gitUiCommands.Module, scriptFilePath);
+            var commitMessageHelper = new CommitMessageHelper(gitUiCommands.Module, scriptExecutorPath, scriptFilePath);
 
             MessageField = GetField<EditNetSpell>("Message");
             CommitButton = GetField<Button>("Commit");
