@@ -4,26 +4,18 @@ namespace GitUI.CommandsDialogs
 {
     public sealed partial class FormAddFiles : GitModuleForm
     {
-
-        /// <summary>
-        /// For VS designer
-        /// </summary>
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
         private FormAddFiles()
-            : this(null)
-        {
-        }
-
-        public FormAddFiles(GitUICommands aCommands, string addFile)
-            : base(aCommands)
         {
             InitializeComponent();
-            Translate();
-            Filter.Text = addFile ?? ".";
         }
 
-        public FormAddFiles(GitUICommands aCommands)
-            : this(aCommands, null)
+        public FormAddFiles(GitUICommands commands, string addFile = null)
+            : base(commands)
         {
+            InitializeComponent();
+            InitializeComplete();
+            Filter.Text = addFile ?? ".";
         }
 
         private void ShowFilesClick(object sender, EventArgs e)
@@ -34,7 +26,9 @@ namespace GitUI.CommandsDialogs
         private void AddFilesClick(object sender, EventArgs e)
         {
             if (FormProcess.ShowDialog(this, string.Format("add{0} \"{1}\"", force.Checked ? " -f" : "", Filter.Text), false))
+            {
                 Close();
+            }
         }
     }
 }

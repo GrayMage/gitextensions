@@ -24,43 +24,66 @@ namespace GitUI
                 {
                     instance._active = value;
                     if (instance._active)
+                    {
                         Application.AddMessageFilter(instance);
+                    }
                     else
+                    {
                         Application.RemoveMessageFilter(instance);
+                    }
                 }
             }
         }
-
-        private IntPtr  _previousHWnd = IntPtr.Zero;
-        private bool    _GEControl;
 
         public bool PreFilterMessage(ref Message m)
         {
             const int WM_MOUSEWHEEL = 0x20a;
             const int WM_MOUSEHWHEEL = 0x20e;
-            if (m.Msg == WM_MOUSEWHEEL || m.Msg == WM_MOUSEHWHEEL)
+            if (m.Msg != WM_MOUSEWHEEL && m.Msg != WM_MOUSEHWHEEL)
             {
-                // WM_MOUSEWHEEL, find the control at screen position m.LParam
-                Point pos = new Point(m.LParam.ToInt32());
-                IntPtr hWnd = NativeMethods.WindowFromPoint(pos);
-                if (hWnd != IntPtr.Zero && hWnd != m.HWnd && Control.FromHandle(hWnd) != null)
+                return false;
+            }
+
+            // WM_MOUSEWHEEL, find the control at screen position m.LParam
+            var pos = new Point(m.LParam.ToInt32());
+            IntPtr hwnd = NativeMethods.WindowFromPoint(pos);
+            if (hwnd == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            Control control = Control.FromHandle(hwnd);
+            if (control == null)
+            {
+                return false;
+            }
+
+            if (hwnd == m.HWnd && !isNonScrollableRichTextBox(control))
+            {
+                return false;
+            }
+
+            while (control != null && !(control is GitExtensionsControl))
+            {
+                bool nonScrollableRtbx = isNonScrollableRichTextBox(control);
+
+                control = control.Parent;
+                if (nonScrollableRtbx)
                 {
-                    if (_previousHWnd != hWnd)
-                    {
-                        Control control = Control.FromHandle(hWnd);
-                        while (control != null && !(control is GitExtensionsControl))
-                            control = control.Parent;
-                        _previousHWnd = hWnd;
-                        _GEControl = control != null;
-                    }
-                    if (_GEControl)
-                    {
-                        NativeMethods.SendMessage(hWnd, m.Msg, m.WParam, m.LParam);
-                        return true;
-                    }
+                    hwnd = control.Handle;
                 }
             }
-            return false;
+
+            if (control == null)
+            {
+                return false;
+            }
+
+            NativeMethods.SendMessage(hwnd, m.Msg, m.WParam, m.LParam);
+            return true;
+
+            bool isNonScrollableRichTextBox(Control c) =>
+                c is RichTextBox rtb && rtb.ScrollBars == RichTextBoxScrollBars.None;
         }
 
         private static class NativeMethods
@@ -74,10 +97,10 @@ namespace GitUI
             public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wp, IntPtr lp);
 
             [StructLayout(LayoutKind.Sequential)]
-            public struct POINT
+            public readonly struct POINT
             {
-                public int X;
-                public int Y;
+                public readonly int X;
+                public readonly int Y;
 
                 public POINT(int x, int y)
                 {
@@ -85,15 +108,8 @@ namespace GitUI
                     Y = y;
                 }
 
-                public static implicit operator System.Drawing.Point(POINT p)
-                {
-                    return new System.Drawing.Point(p.X, p.Y);
-                }
-
-                public static implicit operator POINT(System.Drawing.Point p)
-                {
-                    return new POINT(p.X, p.Y);
-                }
+                public static implicit operator Point(POINT p) => new Point(p.X, p.Y);
+                public static implicit operator POINT(Point p) => new POINT(p.X, p.Y);
             }
         }
     }

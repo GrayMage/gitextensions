@@ -8,18 +8,24 @@ namespace GitUI.CommandsDialogs
 {
     public partial class FormRevertCommit : GitModuleForm
     {
-        private readonly TranslationString _noneParentSelectedText =  new TranslationString("None parent is selected!");
+        private readonly TranslationString _noneParentSelectedText = new TranslationString("None parent is selected!");
         private readonly TranslationString _noneParentSelectedTextCaption = new TranslationString("Error");
 
         private bool _isMerge;
 
-        public FormRevertCommit(GitUICommands aCommands, GitRevision Revision)
-            : base(aCommands)
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
+        private FormRevertCommit()
         {
-            this.Revision = Revision;
+            InitializeComponent();
+        }
+
+        public FormRevertCommit(GitUICommands commands, GitRevision revision)
+            : base(commands)
+        {
+            Revision = revision;
 
             InitializeComponent();
-            Translate();
+            InitializeComplete();
         }
 
         public GitRevision Revision { get; set; }
@@ -30,20 +36,25 @@ namespace GitUI.CommandsDialogs
 
             ParentsList.Items.Clear(); // TODO: search this line and the ones below to find code duplication
 
-            _isMerge = Module.IsMerge(Revision.Guid);
+            _isMerge = Module.IsMerge(Revision.ObjectId);
             parentListPanel.Visible = _isMerge;
             if (_isMerge)
             {
-                var parents = Module.GetParentsRevisions(Revision.Guid);
+                var parents = Module.GetParentRevisions(Revision.ObjectId);
 
-                for (int i = 0; i < parents.Length; i++)
+                for (int i = 0; i < parents.Count; i++)
                 {
-                    var item = new ListViewItem(i + 1 + "");
-                    item.SubItems.Add(parents[i].Subject);
-                    item.SubItems.Add(parents[i].Author);
-                    item.SubItems.Add(parents[i].CommitDate.ToShortDateString());
-                    ParentsList.Items.Add(item);
+                    ParentsList.Items.Add(new ListViewItem((i + 1).ToString())
+                    {
+                        SubItems =
+                        {
+                            parents[i].Subject,
+                            parents[i].Author,
+                            parents[i].CommitDate.ToShortDateString()
+                        }
+                    });
                 }
+
                 ParentsList.TopItem.Selected = true;
                 Size size = MinimumSize;
                 size.Height += 100;
@@ -67,7 +78,7 @@ namespace GitUI.CommandsDialogs
                 }
             }
 
-            FormProcess.ShowDialog(this, GitCommandHelpers.RevertCmd(Revision.Guid, AutoCommit.Checked, parentIndex));
+            FormProcess.ShowDialog(this, GitCommandHelpers.RevertCmd(Revision.ObjectId, AutoCommit.Checked, parentIndex));
             MergeConflictHandler.HandleMergeConflicts(UICommands, this, AutoCommit.Checked);
             DialogResult = DialogResult.OK;
             Close();

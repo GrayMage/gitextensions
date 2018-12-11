@@ -17,7 +17,6 @@ namespace GitCommandsTests
         private IEnvironmentAbstraction _environment;
         private IEnvironmentPathsProvider _provider;
 
-
         [SetUp]
         public void Setup()
         {
@@ -51,7 +50,6 @@ namespace GitCommandsTests
             CollectionAssert.AreEqual(GetValidPaths().ToArray(), validPaths.ToArray());
         }
 
-
         [Platform(Include = "Win")]
         [TestCase("\\\\my-pc\\Work\\GitExtensions\\", true)]
         [TestCase("C:\\Work\\GitExtensions\\", true)]
@@ -61,15 +59,6 @@ namespace GitCommandsTests
         [TestCase("", false)]
         [TestCase("\"C:\\Work\\GitExtensions\\", false)]
         public void IsValidPath(string given, bool expected)
-        {
-            EnvironmentPathsProvider.IsValidPath(given).Should().Be(expected);
-        }
-
-        [Platform(Exclude = "Win")]
-        [TestCase("//my-pc/Work/GitExtensions/", true)]
-        [TestCase("/my-pc/Work/GitExtensions/", true)]
-        [TestCase("/my-pc/Work/GitExtensions", true)]
-        public void IsValidPath_Mono(string given, bool expected)
         {
             EnvironmentPathsProvider.IsValidPath(given).Should().Be(expected);
         }
@@ -85,7 +74,7 @@ namespace GitCommandsTests
             }
             else
             {
-                //I am not able to figure out any invalid (giving exception) path under mono
+                // I am not able to figure out any invalid (giving exception) path under mono
             }
         }
 

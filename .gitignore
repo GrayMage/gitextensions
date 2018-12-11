@@ -9,11 +9,8 @@ _ReSharper*/
 TestResults/
 *.DS_Store*
 
-*/obj
-Plugins/*/obj
-Plugins/*/bin
-Plugins/*/*/obj
-Plugins/*/*/bin
+obj/
+bin/
 
 #ignore output mild compiler
 GitExtensionsShellEx/Generated/
@@ -30,8 +27,8 @@ GitExtensionsShellEx/Generated/
 *.opensdf
 *.ipch
 *.iml
-*.VS2015.VC.db
-*.VS2015.sqlite
+*.VC.db
+*.sqlite
 *.aps
 *.bak
 *.[Cc]ache
@@ -48,12 +45,12 @@ GitPlugin/Properties/Resources.resources
 test-results/*
 GitCommandsTests/test-results/*
 /!runTests.bat
-GitExtensionsMono.sln.VisualState.xml
 TestResult.xml
 libgit2sharp
 Setup/GitExtensions/
-Setup/GitExtensions*Mono.zip
+Setup/GitExtensions-Portable-*.zip
 Setup/tools/tx.exe
+Plugins/GitExtensions.PluginManager/*
 
 # Backup & report files from converting an old project file to a newer
 # Visual Studio version. Backup files are not needed, because we have git ;-)
@@ -66,3 +63,7 @@ UpgradeLog*.htm*
 packages/
 GitExtensions.*.sln.VisualState.xml
 GitExtensions.settings.backup
+/Setup/*.zip
+/Setup/Changelog.md
+*.received.*
+Directory.Build.rsp

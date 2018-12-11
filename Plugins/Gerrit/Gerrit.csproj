@@ -23,8 +23,9 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Prefer32Bit>false</Prefer32Bit>
+    <CodeAnalysisRuleSet>..\..\GitExtensions.ruleset</CodeAnalysisRuleSet>
+    <DocumentationFile>bin\Debug\Gerrit.xml</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -33,18 +34,18 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Prefer32Bit>false</Prefer32Bit>
+    <CodeAnalysisRuleSet>..\..\GitExtensions.ruleset</CodeAnalysisRuleSet>
+    <DocumentationFile>bin\Release\Gerrit.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Newtonsoft.Json, Version=10.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\Newtonsoft.Json.10.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="System" />
-    <Reference Include="System.Core" />
+    <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="10.0.3" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="FormPluginInformation.cs">
@@ -100,6 +101,10 @@
       <Name>GitCommands</Name>
       <Private>False</Private>
     </ProjectReference>
+    <ProjectReference Include="..\..\GitExtUtils\GitExtUtils.csproj">
+      <Project>{0F1F1168-A4B2-4FA2-B17B-735140D17F39}</Project>
+      <Name>GitExtUtils</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\GitUI\GitUI.csproj">
       <Project>{CF5B22E7-230F-4E50-BE88-C4F7023CED2C}</Project>
       <Name>GitUI</Name>
@@ -132,6 +137,7 @@
     </EmbeddedResource>
     <EmbeddedResource Include="FormGitReview.resx">
       <DependentUpon>FormGitReview.cs</DependentUpon>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
@@ -140,7 +146,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
-    <None Include="packages.config" />
     <None Include="Resources\GerritPublish.png" />
   </ItemGroup>
   <ItemGroup>
@@ -148,6 +153,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Resources\GerritInstallHook.png" />
+    <None Include="Resources\IconGerrit.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

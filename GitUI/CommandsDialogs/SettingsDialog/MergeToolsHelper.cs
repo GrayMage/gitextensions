@@ -2,21 +2,22 @@
 using System.IO;
 using GitCommands;
 using GitCommands.Utils;
+using JetBrains.Annotations;
 using Microsoft.Win32;
 
 namespace GitUI.CommandsDialogs.SettingsDialog
 {
-    static class MergeToolsHelper
+    internal static class MergeToolsHelper
     {
         private static string GetGlobalSetting(ConfigFileSettingsSet settings, string setting)
         {
             return settings.GlobalSettings.GetValue(setting);
         }
 
+        [CanBeNull]
         public static string GetFullPath(string fileName)
         {
-            string fullPath;
-            PathUtil.TryFindFullPath(fileName, out fullPath);
+            PathUtil.TryFindFullPath(fileName, out var fullPath);
 
             return fullPath;
         }
@@ -26,61 +27,79 @@ namespace GitUI.CommandsDialogs.SettingsDialog
             foreach (string location in locations)
             {
                 if (string.IsNullOrEmpty(location))
+                {
                     continue;
+                }
+
                 if (Path.IsPathRooted(location))
                 {
                     if (File.Exists(location))
+                    {
                         return location;
+                    }
+
                     continue;
                 }
-                string programFilesPath = Environment.GetEnvironmentVariable("ProgramFiles");
 
-                string path;
+                string fullName;
+                string programFilesPath = Environment.GetEnvironmentVariable("ProgramFiles") ?? "";
 
-                if (!string.IsNullOrEmpty(programFilesPath))
+                if (CheckFileExists(programFilesPath))
                 {
-                    path = Path.Combine(programFilesPath, location);
-                    if (Directory.Exists(path))
-                    {
-                        string fullName = Path.Combine(path, fileName);
-                        if (File.Exists(fullName))
-                            return fullName;
-                    }
+                    return fullName;
                 }
 
-                if (8 == IntPtr.Size
-                    || (!String.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432"))))
-                {
-                    programFilesPath = Environment.GetEnvironmentVariable("ProgramFiles(x86)");
+                programFilesPath = Environment.GetEnvironmentVariable("ProgramFiles(x86)") ?? "";
 
-                    if (!string.IsNullOrEmpty(programFilesPath))
-                    {
-                        path = Path.Combine(programFilesPath, location);
-                        if (Directory.Exists(path))
-                        {
-                            string fullName = Path.Combine(path, fileName);
-                            if (File.Exists(fullName))
-                                return fullName;
-                        }
-                    }
+                if ((IntPtr.Size == 8 ||
+                    !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432"))) &&
+                    CheckFileExists(programFilesPath))
+                {
+                    return fullName;
+                }
+
+                string localAppDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+                if (CheckFileExists(localAppDataPath))
+                {
+                    return fullName;
+                }
+
+                string localAppDataProgramsPath = Path.Combine(localAppDataPath, "Programs");
+
+                if (CheckFileExists(localAppDataProgramsPath))
+                {
+                    return fullName;
+                }
+
+                bool CheckFileExists(string path)
+                {
+                    fullName = Path.Combine(path, location, fileName);
+                    return File.Exists(fullName);
                 }
             }
 
-            return string.Empty;
+            return "";
         }
 
+        [CanBeNull]
         private static string UnquoteString(string str)
         {
-            if (String.IsNullOrEmpty(str))
+            if (string.IsNullOrEmpty(str))
+            {
                 return str;
+            }
 
             int length = str.Length;
             if (length > 1 && str[0] == '\"' && str[length - 1] == '\"')
+            {
                 str = str.Substring(1, length - 2);
+            }
 
             return str;
         }
 
+        [CanBeNull]
         public static string FindPathForKDiff(string pathFromConfig)
         {
             if (string.IsNullOrEmpty(pathFromConfig) || !File.Exists(pathFromConfig))
@@ -89,25 +108,34 @@ namespace GitUI.CommandsDialogs.SettingsDialog
                 if (EnvUtils.RunningOnUnix())
                 {
                     // Maybe command -v is better, but didn't work
-                    kdiff3path = GitCommandHelpers.RunCmd("which", "kdiff3").Replace("\n", string.Empty);
+                    kdiff3path = new Executable("which").GetOutput("kdiff3").Replace("\n", "");
                     if (string.IsNullOrEmpty(kdiff3path))
+                    {
                         return null;
+                    }
                 }
                 else if (EnvUtils.RunningOnWindows())
                 {
                     string regkdiff3path = GetRegistryValue(Registry.LocalMachine, "SOFTWARE\\KDiff3", "");
                     if (regkdiff3path != "")
+                    {
                         regkdiff3path += "\\kdiff3.exe";
+                    }
 
                     kdiff3path = FindFileInFolders("kdiff3.exe", @"KDiff3\", regkdiff3path);
                     if (string.IsNullOrEmpty(kdiff3path))
+                    {
                         return null;
+                    }
                 }
+
                 return kdiff3path;
             }
+
             return null;
         }
 
+        [CanBeNull]
         public static string GetDiffToolExeFile(string difftoolText)
         {
             string diffTool = difftoolText.ToLowerInvariant();
@@ -138,6 +166,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog
                 case "vscode":
                     return "code.exe";
             }
+
             return null;
         }
 
@@ -172,11 +201,12 @@ namespace GitUI.CommandsDialogs.SettingsDialog
                 case "tmerge":
                     exeName = "TortoiseGitMerge.exe"; // TortoiseGit 1.8 use new names
                     string difftoolPath = FindFileInFolders(exeName, @"TortoiseGit\bin\");
-                    if (String.IsNullOrEmpty(difftoolPath))
+                    if (string.IsNullOrEmpty(difftoolPath))
                     {
                         exeName = "TortoiseMerge.exe";
                         difftoolPath = FindFileInFolders(exeName, @"TortoiseGit\bin\", @"TortoiseSVN\bin\");
                     }
+
                     return difftoolPath;
                 case "winmerge":
                     return FindDiffToolFullPath(settings, exeName, "difftool.winmerge.path", @"WinMerge\");
@@ -185,6 +215,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog
                 case "vscode":
                     return FindDiffToolFullPath(settings, exeName, "difftool.vscode.path", @"Microsoft VS Code");
             }
+
             exeName = difftoolText + ".exe";
             return GetFullPath(exeName);
         }
@@ -226,21 +257,26 @@ namespace GitUI.CommandsDialogs.SettingsDialog
                 case "vscode":
                     return "\"" + exeFile + "\" --wait --diff \"$LOCAL\" \"$REMOTE\"";
             }
+
             return "";
         }
 
+        [CanBeNull]
         public static string GetMergeToolExeFile(string mergeToolText)
         {
             string mergeTool = mergeToolText.ToLowerInvariant();
             var exeName = GetDiffToolExeFile(mergeTool);
             if (exeName != null)
+            {
                 return exeName;
+            }
 
             switch (mergeTool)
             {
                 case "tortoisemerge":
                     return "TortoiseMerge.exe";
             }
+
             return null;
         }
 
@@ -269,7 +305,10 @@ namespace GitUI.CommandsDialogs.SettingsDialog
                 case "kdiff3":
                     string regkdiff3path = GetRegistryValue(Registry.LocalMachine, "SOFTWARE\\KDiff3", "");
                     if (regkdiff3path != "")
+                    {
                         regkdiff3path += "\\" + exeName;
+                    }
+
                     return FindDiffToolFullPath(settings, exeName, "mergetool.kdiff3.path", @"KDiff3\", regkdiff3path);
                 case "meld":
                     return FindDiffToolFullPath(settings, exeName, "mergetool.meld.path", @"Meld\", @"Meld (x86)\");
@@ -287,6 +326,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog
                         exeName = "TortoiseMerge.exe";
                         path = FindFileInFolders(exeName, @"TortoiseGit\bin\", @"TortoiseSVN\bin\");
                     }
+
                     return path;
                 case "winmerge":
                     return FindDiffToolFullPath(settings, exeName, "mergetool.winmerge.path", @"WinMerge\");
@@ -295,6 +335,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog
                 case "vscode":
                     return FindDiffToolFullPath(settings, exeName, "mergetool.vscode.path", @"Microsoft VS Code");
             }
+
             exeName = mergeToolText + ".exe";
             return GetFullPath(exeName);
         }
@@ -306,9 +347,8 @@ namespace GitUI.CommandsDialogs.SettingsDialog
             {
                 case "kdiff3":
                     return "";
-                case "winmerge":
-                    return "\"" + exeFile + "\" -e -u -dl \"Original\" -dr \"Modified\" \"$MERGED\" \"$REMOTE\"";
             }
+
             return AutoConfigMergeToolCmd(mergeToolText, exeFile);
         }
 
@@ -332,14 +372,19 @@ namespace GitUI.CommandsDialogs.SettingsDialog
                 case "tortoisemerge":
                     string command = "\"{0}\" /base:\"$BASE\" /mine:\"$LOCAL\" /theirs:\"$REMOTE\" /merged:\"$MERGED\"";
                     if (exeFile.ToLower().Contains("tortoisegit"))
+                    {
                         command = command.Replace("/", "-");
+                    }
 
-                    return String.Format(command, exeFile);
+                    return string.Format(command, exeFile);
                 case "vscode":
                     return "\"" + exeFile + "\" --wait \"$MERGED\" ";
                 case "vsdiffmerge":
                     return "\"" + exeFile + "\" /m \"$REMOTE\" \"$LOCAL\" \"$BASE\" \"$MERGED\"";
+                case "winmerge":
+                    return "\"" + exeFile + "\" -e -u  -wl -wr -fm -dl \"Mine: $LOCAL\" -dm \"Merged: $BASE\" -dr \"Theirs: $REMOTE\" \"$LOCAL\" \"$BASE\" \"$REMOTE\" -o \"$MERGED\"";
             }
+
             // other commands supported natively by git for windows
             return "";
         }
@@ -361,6 +406,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog
             catch (UnauthorizedAccessException)
             {
             }
+
             return value ?? string.Empty;
         }
 
@@ -372,23 +418,21 @@ namespace GitUI.CommandsDialogs.SettingsDialog
                 return exeName;
             }
 
-            var vsVersions = new string[] { "14.0", "12.0", "11.0" };
+            var vsVersions = new[] { "14.0", "12.0", "11.0" };
 
             foreach (var version in vsVersions)
             {
                 string registryKeyString = string.Format(@"SOFTWARE{0}Microsoft\VisualStudio\{1}", Environment.Is64BitProcess ? @"\Wow6432Node\" : "\\", version);
                 using (RegistryKey localMachineKey = Registry.LocalMachine.OpenSubKey(registryKeyString))
                 {
-                    if (localMachineKey != null)
+                    var path = localMachineKey?.GetValue("InstallDir") as string;
+                    if (!string.IsNullOrEmpty(path))
                     {
-                        var path = localMachineKey.GetValue("InstallDir") as string;
-                        if (!string.IsNullOrEmpty(path))
-                        {
-                            return Path.Combine(path, exeName);
-                        }
+                        return Path.Combine(path, exeName);
                     }
                 }
             }
+
             return exeName;
         }
     }

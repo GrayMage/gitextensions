@@ -1,19 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Text;
+using GitCommands;
+using JetBrains.Annotations;
 
 namespace GitUIPluginInterfaces
 {
     /// <summary>Provides manipulation with git module.</summary>
     public interface IGitModule
     {
+        [NotNull]
         IConfigFileSettings LocalConfigFile { get; }
 
         string AddRemote(string remoteName, string path);
-        IList<IGitRef> GetRefs(bool tags = true, bool branches = true);
+        IReadOnlyList<IGitRef> GetRefs(bool tags = true, bool branches = true);
         IEnumerable<string> GetSettings(string setting);
-        IEnumerable<IGitItem> GetTree(string id, bool full);
+        IEnumerable<IGitItem> GetTree([CanBeNull] ObjectId commitId, bool full);
 
         /// <summary>
         /// Removes the registered remote by running <c>git remote rm</c> command.
@@ -27,49 +29,32 @@ namespace GitUIPluginInterfaces
         /// <param name="remoteName">The current remote name.</param>
         /// <param name="newName">The new remote name.</param>
         string RenameRemote(string remoteName, string newName);
+
+        /// <summary>
+        /// Parses the revisionExpression as a git reference and returns an <see cref="ObjectId"/>./>
+        /// </summary>
+        /// <param name="revisionExpression">An expression like HEAD or commit hash that can be parsed as a git reference.</param>
+        /// <returns>An ObjectID representing that git reference</returns>
+        ObjectId RevParse(string revisionExpression);
+
         void SetSetting(string setting, string value);
         void UnsetSetting(string setting);
 
-        /// <summary>
-        /// Run git command, console window is hidden, redirect output
-        /// </summary>
-        Process RunGitCmdDetached(string arguments, Encoding encoding = null);
+        #region Git process execution
+
+        IEnumerable<string> GetGitOutputLines(ArgumentString arguments, Encoding outputEncoding = null);
 
         /// <summary>
         /// Run git command, console window is hidden, wait for exit, redirect output
         /// </summary>
-        string RunGitCmd(string arguments, Encoding encoding = null, byte[] stdInput = null);
+        string RunGitCmd(ArgumentString arguments, Encoding outputEncoding = null, byte[] stdInput = null);
 
         /// <summary>
         /// Run git command, console window is hidden, wait for exit, redirect output
         /// </summary>
-        CmdResult RunGitCmdResult(string arguments, Encoding encoding = null, byte[] stdInput = null);
+        ExecutionResult RunGitCmdResult(ArgumentString arguments);
 
-        /// <summary>
-        /// Run command, console window is hidden, wait for exit, redirect output
-        /// </summary>
-        string RunCmd(string cmd, string arguments, Encoding encoding = null, byte[] stdIn = null);
-
-        /// <summary>
-        /// Run command, console window is hidden, wait for exit, redirect output
-        /// </summary>
-        CmdResult RunCmdResult(string cmd, string arguments, Encoding encoding = null, byte[] stdInput = null);
-
-        string RunBatchFile(string batchFile);
-
-        /// <summary>
-        /// Determines whether the given repository has index.lock file.
-        /// </summary>
-        /// <returns><see langword="true"/> is index is locked; otherwise <see langword="false"/>.</returns>
-        bool IsIndexLocked();
-
-        /// <summary>
-        /// Delete index.lock in the current working folder.
-        /// </summary>
-        /// <param name="includeSubmodules">
-        ///     If <see langword="true"/> all submodules will be scanned for index.lock files and have them delete, if found.
-        /// </param>
-        void UnlockIndex(bool includeSubmodules);
+        #endregion
 
         /// <summary>Gets the directory which contains the git repository.</summary>
         string WorkingDir { get; }
@@ -85,29 +70,32 @@ namespace GitUIPluginInterfaces
         /// See https://git-scm.com/docs/git-rev-parse#git-rev-parse---git-pathltpathgt
         /// </summary>
         /// <param name="relativePath">A path relative to the .git directory</param>
-        /// <returns></returns>
         string ResolveGitInternalPath(string relativePath);
 
         /// <summary>Indicates whether the specified directory contains a git repository.</summary>
         bool IsValidGitWorkingDir();
 
-        /// <summary>Indicates whether the repository is in a 'detached HEAD' state.</summary>
+        /// <summary>Indicates HEAD is not pointing to a branch (i.e. it is detached).</summary>
         bool IsDetachedHead();
 
-        bool IsExistingCommitHash(string sha1Fragment, out string fullSha1);
-
-        /// <summary>Gets the path to the git application executable.</summary>
-        string GitCommand { get; }
-
-        Version AppVersion { get; }
-
-        string GravatarCacheDir { get; }
+        [ContractAnnotation("=>false,objectId:null")]
+        [ContractAnnotation("=>true,objectId:notnull")]
+        bool TryResolvePartialCommitId(string objectIdPrefix, out ObjectId objectId);
 
         string GetSubmoduleFullPath(string localPath);
 
         IEnumerable<IGitSubmoduleInfo> GetSubmodulesInfo();
 
-        IList<string> GetSubmodulesLocalPaths(bool recursive = true);
+        /// <summary>
+        /// Gets the local paths of any submodules of this git module.
+        /// </summary>
+        /// <remarks>
+        /// <para>This method obtains its results by parsing the <c>.gitmodules</c> file.</para>
+        ///
+        /// <para>This approach is a faster than <see cref="GetSubmodulesInfo"/> which
+        /// invokes the <c>git submodule</c> command.</para>
+        /// </remarks>
+        IReadOnlyList<string> GetSubmodulesLocalPaths(bool recursive = true);
 
         IGitModule GetSubmodule(string submoduleName);
 
@@ -115,14 +103,10 @@ namespace GitUIPluginInterfaces
         /// Retrieves registered remotes by running <c>git remote show</c> command.
         /// </summary>
         /// <returns>Registered remotes.</returns>
-        string[] GetRemotes();
+        IReadOnlyList<string> GetRemoteNames();
 
-        /// <summary>
-        /// Retrieves registered remotes by running <c>git remote show</c> command.
-        /// </summary>
-        /// <param name="allowEmpty"></param>
-        /// <returns>Registered remotes.</returns>
-        string[] GetRemotes(bool allowEmpty);
+        /// <summary>Gets the remote of the current branch; or "" if no remote is configured.</summary>
+        string GetCurrentRemote();
 
         string GetSetting(string setting);
         string GetEffectiveSetting(string setting);
@@ -137,10 +121,15 @@ namespace GitUIPluginInterfaces
 
         bool IsRunningGitProcess();
 
+        [NotNull]
         ISettingsSource GetEffectiveSettings();
 
         string ReEncodeStringFromLossless(string s);
 
         string ReEncodeCommitMessage(string s, string toEncodingName);
+
+        string GetDescribe(ObjectId commitId);
+
+        (int totalCount, Dictionary<string, int> countByName) GetCommitsByContributor(DateTime? since = null, DateTime? until = null);
     }
 }

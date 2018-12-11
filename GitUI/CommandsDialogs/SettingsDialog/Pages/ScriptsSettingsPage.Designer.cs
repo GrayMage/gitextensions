@@ -119,29 +119,24 @@
             // HotkeyCommandIdentifier
             // 
             this.HotkeyCommandIdentifier.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.AllCells;
-            this.HotkeyCommandIdentifier.DataPropertyName = "HotkeyCommandIdentifier";
             this.HotkeyCommandIdentifier.HeaderText = "#";
             this.HotkeyCommandIdentifier.Name = "HotkeyCommandIdentifier";
             this.HotkeyCommandIdentifier.ReadOnly = true;
-            this.HotkeyCommandIdentifier.Width = 39;
             // 
             // EnabledColumn
             // 
-            this.EnabledColumn.DataPropertyName = "Enabled";
             this.EnabledColumn.HeaderText = "Enabled";
             this.EnabledColumn.Name = "EnabledColumn";
             this.EnabledColumn.ReadOnly = true;
             // 
             // OnEvent
             // 
-            this.OnEvent.DataPropertyName = "OnEvent";
             this.OnEvent.HeaderText = "OnEvent";
             this.OnEvent.Name = "OnEvent";
             this.OnEvent.ReadOnly = true;
             // 
             // AskConfirmation
             // 
-            this.AskConfirmation.DataPropertyName = "AskConfirmation";
             this.AskConfirmation.HeaderText = "Confirmation";
             this.AskConfirmation.Name = "AskConfirmation";
             this.AskConfirmation.ReadOnly = true;
@@ -173,7 +168,7 @@
             // 
             this.moveUpButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.moveUpButton.Enabled = false;
-            this.moveUpButton.Image = global::GitUI.Properties.Resources.ArrowUp;
+            this.moveUpButton.Image = global::GitUI.Properties.Images.ArrowUp;
             this.moveUpButton.Location = new System.Drawing.Point(42, 57);
             this.moveUpButton.Name = "moveUpButton";
             this.moveUpButton.Size = new System.Drawing.Size(26, 23);
@@ -197,7 +192,7 @@
             // 
             this.moveDownButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.moveDownButton.Enabled = false;
-            this.moveDownButton.Image = global::GitUI.Properties.Resources.ArrowDown;
+            this.moveDownButton.Image = global::GitUI.Properties.Images.ArrowDown;
             this.moveDownButton.Location = new System.Drawing.Point(42, 148);
             this.moveDownButton.Name = "moveDownButton";
             this.moveDownButton.Size = new System.Drawing.Size(26, 23);

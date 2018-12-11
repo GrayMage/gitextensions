@@ -1,31 +1,33 @@
-﻿using GitCommands;
+﻿using System.Linq;
+using System.Text.RegularExpressions;
+using GitCommands;
 using GitCommands.Config;
 using GitUIPluginInterfaces;
-using System.Linq;
-using System.Text.RegularExpressions;
+using JetBrains.Annotations;
 
 namespace Bitbucket
 {
-    class Settings
+    public class Settings
     {
         private const string BitbucketHttpRegex =
             @"https?:\/\/([\w\.\:]+\@)?(?<url>([a-zA-Z0-9\.\-\/]+?)):?(\d+)?\/scm\/(?<project>~?([\w\-]+?))\/(?<repo>([\w\-]+)).git";
         private const string BitbucketSshRegex =
             @"ssh:\/\/([\w\.]+\@)(?<url>([a-zA-Z0-9\.\-]+)):?(\d+)?\/(?<project>~?([\w\-]+))\/(?<repo>([\w\-]+)).git";
 
+        [CanBeNull]
         public static Settings Parse(IGitModule gitModule, ISettingsSource settings, BitbucketPlugin plugin)
         {
             var result = new Settings
-                             {
-                                 Username = plugin.BitbucketUsername.ValueOrDefault(settings),
-                                 Password = plugin.BitbucketPassword.ValueOrDefault(settings),
-                                 BitbucketUrl = plugin.BitbucketBaseUrl.ValueOrDefault(settings),
-                                 DisableSSL = plugin.BitbucketDisableSsl.ValueOrDefault(settings)
-                             };
+            {
+                Username = plugin.BitbucketUsername.ValueOrDefault(settings),
+                Password = plugin.BitbucketPassword.ValueOrDefault(settings),
+                BitbucketUrl = plugin.BitbucketBaseUrl.ValueOrDefault(settings),
+                DisableSSL = plugin.BitbucketDisableSsl.ValueOrDefault(settings)
+            };
 
-            var module = ((GitModule)gitModule);
+            var module = (GitModule)gitModule;
 
-            var remotes = module.GetRemotes()
+            var remotes = module.GetRemoteNames()
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Distinct()
                 .Select(r => module.GetSetting(string.Format(SettingKeyString.RemoteUrl, r)))

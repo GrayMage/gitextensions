@@ -2,7 +2,7 @@
 using System.IO;
 using System.Windows.Forms;
 using GitCommands;
-using GitCommands.Repository;
+using GitCommands.UserRepositoryHistory;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs
@@ -24,56 +24,54 @@ namespace GitUI.CommandsDialogs
         private readonly TranslationString _initMsgBoxCaption =
             new TranslationString("Create new repository");
 
-        private readonly EventHandler<GitModuleEventArgs> GitModuleChanged;
+        private readonly EventHandler<GitModuleEventArgs> _gitModuleChanged;
 
-        public FormInit(string dir, EventHandler<GitModuleEventArgs> GitModuleChanged)
+        public FormInit(string dir, EventHandler<GitModuleEventArgs> gitModuleChanged)
         {
-            this.GitModuleChanged = GitModuleChanged;
+            _gitModuleChanged = gitModuleChanged;
             InitializeComponent();
-            Translate();
+            InitializeComplete();
 
-            if (string.IsNullOrEmpty(dir))
+            ThreadHelper.JoinableTaskFactory.Run(async () =>
             {
-                Directory.Text = AppSettings.DefaultCloneDestinationPath;
-            }
-            else
-            {
-                Directory.Text = dir;
-            }
-        }
+                var repositoryHistory = await RepositoryHistoryManager.Locals.LoadRecentHistoryAsync();
 
-        private void DirectoryDropDown(object sender, EventArgs e)
-        {
-            Directory.DataSource = Repositories.RepositoryHistory.Repositories;
-            Directory.DisplayMember = "Path";
+                await this.SwitchToMainThreadAsync();
+                Directory.DataSource = repositoryHistory;
+                Directory.DisplayMember = nameof(Repository.Path);
+            });
+
+            Directory.SelectedIndex = -1;
+            Directory.Text = string.IsNullOrEmpty(dir) ? AppSettings.DefaultCloneDestinationPath : dir;
         }
 
         private void InitClick(object sender, EventArgs e)
         {
             if (string.IsNullOrEmpty(Directory.Text))
             {
-                MessageBox.Show(this, _chooseDirectory.Text,_chooseDirectoryCaption.Text);
+                MessageBox.Show(this, _chooseDirectory.Text, _chooseDirectoryCaption.Text);
                 return;
             }
 
             if (File.Exists(Directory.Text))
             {
-                MessageBox.Show(this, _chooseDirectoryNotFile.Text,_chooseDirectoryNotFileCaption.Text);
+                MessageBox.Show(this, _chooseDirectoryNotFile.Text, _chooseDirectoryNotFileCaption.Text);
                 return;
             }
 
-            GitModule module = new GitModule(Directory.Text);
+            var module = new GitModule(Directory.Text);
 
             if (!System.IO.Directory.Exists(module.WorkingDir))
+            {
                 System.IO.Directory.CreateDirectory(module.WorkingDir);
+            }
 
             MessageBox.Show(this, module.Init(Central.Checked, Central.Checked), _initMsgBoxCaption.Text);
 
-            if (GitModuleChanged != null)
-                GitModuleChanged(this, new GitModuleEventArgs(module));
+            _gitModuleChanged?.Invoke(this, new GitModuleEventArgs(module));
 
-            Repositories.AddMostRecentRepository(Directory.Text);
-
+            var path = Directory.Text;
+            ThreadHelper.JoinableTaskFactory.Run(() => RepositoryHistoryManager.Locals.AddAsMostRecentAsync(path));
             Close();
         }
 
@@ -85,6 +83,20 @@ namespace GitUI.CommandsDialogs
             {
                 Directory.Text = userSelectedPath;
             }
+        }
+
+        internal TestAccessor GetTestAccessor() => new TestAccessor(this);
+
+        internal readonly struct TestAccessor
+        {
+            private readonly FormInit _form;
+
+            public TestAccessor(FormInit form)
+            {
+                _form = form;
+            }
+
+            public ComboBox DirectoryCombo => _form.Directory;
         }
     }
 }

@@ -1,54 +1,57 @@
-# Contributing to Git Extensions
+﻿# Contributing to Git Extensions
 
-## How to contribute code
+GitExtensions is a project with a long history, made possible by [hundreds of contributors](https://github.com/gitextensions/gitextensions/graphs/contributors).
 
-* Login in github (you need an account)
-* Fork the main repository from [github](http://github.com/gitextensions/gitextensions)
-* Read [Project workflow](https://github.com/gitextensions/gitextensions/wiki/Project-Workflow) and [Coding guide](https://github.com/gitextensions/gitextensions/wiki#coding-guide)
-* Push your changes to your fork
-* Send me a pull request
+We welcome contributions including:
 
-If you do not want to use github, I also accept mailed patches. Just make sure the patch is send as an attachement and not in the body of the mail.
+- Ideas for improvements
+- Bug reports
+- Bug fixes
+- New features
 
-## How to debug GitExtensions
+To help the project maintainers be as effective as possible, please follow the simple guidelines below.
 
-The installer is build using WiX. You need to install WiX when you want to build the installer. This can be downloaded here: [http://wixtoolset.org/](http://wixtoolset.org/). If you do not want to build the installer, just open the solution and ignore the warning.
+## Reporting Issues
 
-* Open the solution file (GitExtensions.VS2015.sln, or GitExtensions.VS2013.sln, or GitExtensions.VS2012.sln)
-* Hit F5 to compile and run GitExtensions
+[Search the issue tracker](https://github.com/gitextensions/gitextensions/issues?&q=) for an
+existing or closely related issue before creating a new one. Be sure to include closed issues
+in your search.
 
-## How to create the installer
+If an open issue already exists, read through the discussion. If you can add something helpful, do so.
+Add a 👍 if you'd like to see it prioritised. Subscribe to the issue for updates.
 
-* Download and install WiX [http://wixtoolset.org/](http://wixtoolset.org/)
-* Run Setup\\BuildInstallers.VS2015.cmd, or Setup\\BuildInstallers.VS2013.cmd, or Setup\\BuildInstallers.VS2012.cmd to build the installers
+If a closed issue already exists and the issue was addressed, you may like to try one of the
+[CI builds](https://github.com/gitextensions/gitextensions/wiki/CI-Builds).
 
-## Installing Nuget in Monodevelop/Xamarin Studio
+If no issue exists, create one. Complete the template, and add any further information that
+could be relevant such as steps to reproduce, stack traces, screenshots, git/OS version, etc.
 
-Following steps will add nuget package management capabilities to your monoDevelop/Xamarin Studio. Installing nuget requires at least Monodevelop version 3.0.5.
+## Pull Requests
 
-OBS: Monodevelop 4.0 is Xamarin Studio
+Want to contribute some code? Great! In addition to the regular GitHub Pull Request workflow,
+you'll want to browse our [wiki](https://github.com/gitextensions/gitextensions/wiki).
 
-* On monoDevelop find Add-In manager (macOS is on program main menu, other OS's under tools)
-* over the gallery tab, select "Manage repositories..." from the "Repositories" drop-down menu
-* For monodevelop 3.0.5, add a new URL http://mrward.github.com/monodevelop-nuget-addin-repository/3.0.5/main.mrep otherwise, if using Xamarin Studio use http://mrward.github.com/monodevelop-nuget-addin-repository/4.0/main.mrep
-* A new IDE extension option will appear, select the nuget package management
-* To add nuget packages or maintain it, you right click either on the solution or in the references
+Good places to start contributing include:
 
-On monoDevelop preferences, you will find a new "Nuget" option. Check the box that says "Enable package restore".
+- Open [bugs](https://github.com/gitextensions/gitextensions/labels/bug)
+- Open issues marked [good first issue](https://github.com/gitextensions/gitextensions/labels/good%20first%20issue)
+- Open issues marked [help wanted](https://github.com/gitextensions/gitextensions/labels/help%20wanted)
 
-If by any reason your xbuild is not downloading and installing the packages, manually run the following command to get all the missing packages. Make sure you run it at the top level directory of your solution, like the example below:
+It's a good idea to mention that you're picking something up by commenting on its issue.
 
-```
-gitextensions  (master)$ .nuget/Nuget.sh 
-Successfully installed 'NBug 1.1.1'.
-Successfully installed 'NUnit.Mocks 2.6.2'.
-Successfully installed 'NUnit 2.6.2'.
-Successfully installed 'Rx-Main 2.1.30214.0'.
-Successfully installed 'Rx-Core 2.1.30214.0'.
-Successfully installed 'Rx-Interfaces 2.1.30214.0'.
-Successfully installed 'Rx-PlatformServices 2.1.30214.0'.
-Successfully installed 'Rx-Linq 2.1.30214.0'.
-Successfully installed 'Newtonsoft.Json 4.5.11'.
-Successfully installed 'RestSharp 104.1'.
-Successfully installed 'NBug 1.1.1'.
-```
+If no issue exists, create one before making a PR. This creates the opportunity to discuss
+the issue before you spend time on its implementation. You will likely be more effective
+this way, and have a greater chance of satisfaction in the end.
+
+Pull requests will be reviewed by one or more team members. To improve the chance of your
+pull request being merged, your contribution should be as easy to review as possible.
+Specifically:
+
+- Be focussed in scope
+- Be comprised of clear commits (use interactive rebase to tidy things up if needed)
+- Include a clear description of the changes and why they should be made
+- Be accompanied by unit tests
+- Be consistent with the current code style
+
+When filing a pull request, you should be prepared to answer questions about your changes
+and to perform additional work on the changes in response to review feedback.

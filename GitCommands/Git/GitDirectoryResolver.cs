@@ -2,6 +2,7 @@
 using System.IO;
 using System.IO.Abstractions;
 using System.Linq;
+using JetBrains.Annotations;
 
 namespace GitCommands.Git
 {
@@ -15,7 +16,8 @@ namespace GitCommands.Git
         /// </summary>
         /// <param name="repositoryPath">The repository working folder.</param>
         /// <returns>The resolved location of .git folder.</returns>
-        string Resolve(string repositoryPath);
+        [NotNull]
+        string Resolve([NotNull] string repositoryPath);
     }
 
     /// <summary>
@@ -25,8 +27,7 @@ namespace GitCommands.Git
     {
         private readonly IFileSystem _fileSystem;
 
-
-        public GitDirectoryResolver(IFileSystem fileSystem)
+        public GitDirectoryResolver([NotNull] IFileSystem fileSystem)
         {
             _fileSystem = fileSystem;
         }
@@ -35,7 +36,6 @@ namespace GitCommands.Git
             : this(new FileSystem())
         {
         }
-
 
         /// <summary>
         /// Resolves the .git folder for the given repository.
@@ -75,23 +75,25 @@ namespace GitCommands.Git
                 return string.Empty;
             }
 
-            var gitpath = Path.Combine(repositoryPath, ".git");
-            if (_fileSystem.File.Exists(gitpath))
+            var gitPath = Path.Combine(repositoryPath, ".git");
+            if (_fileSystem.File.Exists(gitPath))
             {
-                var line = _fileSystem.File.ReadLines(gitpath).FirstOrDefault(l => l.StartsWith("gitdir:"));
+                const string gitdir = "gitdir:";
+                var line = _fileSystem.File.ReadLines(gitPath).FirstOrDefault(l => l.StartsWith(gitdir));
                 if (line != null)
                 {
-                    string path = line.Substring(7).Trim().ToNativePath();
+                    string path = line.Substring(gitdir.Length).Trim().ToNativePath();
                     if (Path.IsPathRooted(path))
                     {
                         return path.EnsureTrailingPathSeparator();
                     }
+
                     return Path.GetFullPath(Path.Combine(repositoryPath, path)).EnsureTrailingPathSeparator();
                 }
             }
 
-            gitpath = gitpath.EnsureTrailingPathSeparator();
-            return !_fileSystem.Directory.Exists(gitpath) ? repositoryPath : gitpath;
+            gitPath = gitPath.EnsureTrailingPathSeparator();
+            return !_fileSystem.Directory.Exists(gitPath) ? repositoryPath : gitPath;
         }
     }
 }

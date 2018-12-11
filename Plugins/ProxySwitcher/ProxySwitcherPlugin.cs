@@ -1,8 +1,11 @@
-﻿using GitUIPluginInterfaces;
+﻿using System.ComponentModel.Composition;
+using GitUIPluginInterfaces;
+using ProxySwitcher.Properties;
 using ResourceManager;
 
 namespace ProxySwitcher
 {
+    [Export(typeof(IGitPlugin))]
     public class ProxySwitcherPlugin : GitPluginBase
     {
         public readonly StringSetting Username = new StringSetting("Username", string.Empty);
@@ -14,6 +17,7 @@ namespace ProxySwitcher
         {
             SetNameAndDescription("Proxy Switcher");
             Translate();
+            Icon = Resources.IconProxySwitcher;
         }
 
         public override System.Collections.Generic.IEnumerable<ISetting> GetSettings()
@@ -24,12 +28,13 @@ namespace ProxySwitcher
             yield return HttpProxyPort;
         }
 
-        public override bool Execute(GitUIBaseEventArgs gitUiCommands)
+        public override bool Execute(GitUIEventArgs args)
         {
-            using (var form = new ProxySwitcherForm(this, Settings, gitUiCommands))
+            using (var form = new ProxySwitcherForm(this, Settings, args))
             {
-                form.ShowDialog(gitUiCommands.OwnerForm);
+                form.ShowDialog(args.OwnerForm);
             }
+
             return false;
         }
     }

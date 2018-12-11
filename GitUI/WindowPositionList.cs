@@ -1,17 +1,13 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Runtime.Serialization;
 using System.Windows.Forms;
-using System.Xml;
-using System.Xml.Schema;
 using System.Xml.Serialization;
+using JetBrains.Annotations;
 
 namespace GitUI
 {
@@ -45,12 +41,11 @@ namespace GitUI
     [Serializable]
     public class WindowPositionList
     {
-        public List<WindowPosition> WindowPositions { get; set; }
-
         private static readonly string AppDataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GitExtensions");
 
         private static readonly string ConfigFilePath = Path.Combine(AppDataDir, "WindowPositions.xml");
+        private static readonly XmlSerializer _serializer = new XmlSerializer(typeof(WindowPositionList));
 
         static WindowPositionList()
         {
@@ -59,11 +54,14 @@ namespace GitUI
                 Directory.CreateDirectory(AppDataDir);
             }
         }
+
+        public List<WindowPosition> WindowPositions { get; set; } = new List<WindowPosition>();
+
         protected WindowPositionList()
         {
-            WindowPositions = new List<WindowPosition>();
         }
 
+        [CanBeNull]
         public WindowPosition Get(string name)
         {
             return WindowPositions.FirstOrDefault(r => r.Name == name);
@@ -75,18 +73,19 @@ namespace GitUI
             WindowPositions.Add(pos);
         }
 
+        [CanBeNull]
         public static WindowPositionList Load()
         {
             if (!File.Exists(ConfigFilePath))
             {
                 return new WindowPositionList();
             }
+
             try
             {
-                using (
-                    var stream = File.Open(ConfigFilePath, FileMode.OpenOrCreate, FileAccess.Read, FileShare.ReadWrite))
+                using (var stream = File.Open(ConfigFilePath, FileMode.OpenOrCreate, FileAccess.Read, FileShare.ReadWrite))
                 {
-                    return new XmlSerializer(typeof (WindowPositionList)).Deserialize(stream) as WindowPositionList;
+                    return (WindowPositionList)_serializer.Deserialize(stream);
                 }
             }
             catch
@@ -99,7 +98,7 @@ namespace GitUI
         {
             using (var stream = File.Open(ConfigFilePath, FileMode.Create, FileAccess.Write))
             {
-                new XmlSerializer(typeof(WindowPositionList)).Serialize(stream, this);
+                _serializer.Serialize(stream, this);
             }
         }
     }

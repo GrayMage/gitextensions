@@ -15,7 +15,7 @@ namespace GitCommandsTests.Git
     public class IndexLockManagerTests
     {
         private const string IndexLock = "index.lock";
-        private string _workingDir = @"c:\dev\repo";
+        private readonly string _workingDir = @"c:\dev\repo";
         private string _gitWorkingDir;
         private string _indexLockFile;
         private string _gitFile;
@@ -29,10 +29,6 @@ namespace GitCommandsTests.Git
         [SetUp]
         public void Setup()
         {
-            if (Type.GetType("Mono.Runtime") != null)
-            {
-                _workingDir = "/home/user/repo";
-            }
             _gitFile = Path.Combine(_workingDir, ".git");
             _gitWorkingDir = _gitFile.EnsureTrailingPathSeparator();
             _indexLockFile = Path.Combine(_gitWorkingDir, IndexLock);
@@ -51,7 +47,6 @@ namespace GitCommandsTests.Git
 
             _manager = new IndexLockManager(_module, _gitDirectoryResolver, _fileSystem);
         }
-
 
         [TestCase(false)]
         [TestCase(true)]
@@ -113,56 +108,29 @@ namespace GitCommandsTests.Git
         {
             _file.Exists(_indexLockFile).Returns(true);
 
-            var submoduleGithubWorkingDir = $@"{_workingDir}\Externals\Git.hub\";
+            var submoduleGitHubWorkingDir = $@"{_workingDir}\Externals\Git.hub\";
             var submoduleNbugWorkingDir = $@"{_workingDir}\Externals\NBug\";
-            var submoduleGithubWorkingDirGitDir = $@"{_gitWorkingDir}\modules\Externals\Git.hub\";
-            var submoduleNbugWorkingDirGitDir = $@"{_gitWorkingDir}\modules\Externals\NBug\";
-            var submoduleGithubIndexLock = $@"{_gitWorkingDir}\modules\Externals\Git.hub\{IndexLock}";
-            var submoduleNbugIndexLock = $@"{_gitWorkingDir}\modules\Externals\NBug\{IndexLock}";
+            var submoduleGitHubWorkingDirGitDir = $@"{_gitWorkingDir}\modules\Externals\Git.hub\";
+            var submoduleNBugWorkingDirGitDir = $@"{_gitWorkingDir}\modules\Externals\NBug\";
+            var submoduleGitHubIndexLock = $@"{_gitWorkingDir}\modules\Externals\Git.hub\{IndexLock}";
+            var submoduleNBugIndexLock = $@"{_gitWorkingDir}\modules\Externals\NBug\{IndexLock}";
 
             _module.GetSubmodulesLocalPaths().Returns(new[] { "Externals/Git.hub", "Externals/NBug" });
             _module.GetSubmoduleFullPath(Arg.Any<string>())
-                .Returns(submoduleGithubWorkingDir, submoduleNbugWorkingDir);
-            _gitDirectoryResolver.Resolve(submoduleGithubWorkingDir).Returns(submoduleGithubWorkingDirGitDir);
-            _gitDirectoryResolver.Resolve(submoduleNbugWorkingDir).Returns(submoduleNbugWorkingDirGitDir);
-            _file.Exists(submoduleGithubIndexLock).Returns(true);
-            _file.Exists(submoduleNbugIndexLock).Returns(false);
+                .Returns(submoduleGitHubWorkingDir, submoduleNbugWorkingDir);
+            _gitDirectoryResolver.Resolve(submoduleGitHubWorkingDir).Returns(submoduleGitHubWorkingDirGitDir);
+            _gitDirectoryResolver.Resolve(submoduleNbugWorkingDir).Returns(submoduleNBugWorkingDirGitDir);
+            _file.Exists(submoduleGitHubIndexLock).Returns(true);
+            _file.Exists(submoduleNBugIndexLock).Returns(false);
 
             _manager.UnlockIndex(true);
 
-            _file.Received().Delete(submoduleGithubIndexLock);
-            _file.DidNotReceive().Delete(submoduleNbugIndexLock);
-        }
-
-        [Platform(Exclude = "Win")]
-        [Test]
-        public void UnlockIndex_should_delete_submodule_locks_if_requested_Mono()
-        {
-            _file.Exists(_indexLockFile).Returns(true);
-
-            var submoduleGithubWorkingDir = $@"{_workingDir}/Externals/Git.hub/";
-            var submoduleNbugWorkingDir = $@"{_workingDir}/Externals/NBug/";
-            var submoduleGithubWorkingDirGitDir = $@"{_gitWorkingDir}/modules/Externals/Git.hub/";
-            var submoduleNbugWorkingDirGitDir = $@"{_gitWorkingDir}/modules/Externals/NBug/";
-            var submoduleGithubIndexLock = $@"{_gitWorkingDir}/modules/Externals/Git.hub/{IndexLock}";
-            var submoduleNbugIndexLock = $@"{_gitWorkingDir}/modules/Externals/NBug/{IndexLock}";
-
-            _module.GetSubmodulesLocalPaths().Returns(new[] { "Externals/Git.hub", "Externals/NBug" });
-            _module.GetSubmoduleFullPath(Arg.Any<string>())
-                .Returns(submoduleGithubWorkingDir, submoduleNbugWorkingDir);
-            _gitDirectoryResolver.Resolve(submoduleGithubWorkingDir).Returns(submoduleGithubWorkingDirGitDir);
-            _gitDirectoryResolver.Resolve(submoduleNbugWorkingDir).Returns(submoduleNbugWorkingDirGitDir);
-            _file.Exists(submoduleGithubIndexLock).Returns(true);
-            _file.Exists(submoduleNbugIndexLock).Returns(false);
-
-            _manager.UnlockIndex(true);
-
-            _file.Received().Delete(submoduleGithubIndexLock);
-            _file.DidNotReceive().Delete(submoduleNbugIndexLock);
+            _file.Received().Delete(submoduleGitHubIndexLock);
+            _file.DidNotReceive().Delete(submoduleNBugIndexLock);
         }
 
         [Test]
-        public void Resolve_submodule_real_filsystem()
+        public void Resolve_submodule_real_filesystem()
         {
             using (var helper = new GitModuleTestHelper())
             {

@@ -1,51 +1,62 @@
 ﻿using System;
 using System.IO;
 using System.Text;
+using JetBrains.Annotations;
 
 namespace GitCommands
 {
     /// <summary>
     /// Encoding Helper
     /// </summary>
-    public class EncodingHelper
+    public static class EncodingHelper
     {
-        public static string GetString(byte[] output, byte[] error, Encoding encoding)
+        [NotNull]
+        [Pure]
+        public static string GetString([CanBeNull] byte[] output, [CanBeNull] byte[] error, [NotNull] Encoding encoding)
         {
             if (encoding == null)
             {
-                throw new ArgumentNullException("encoding");
+                throw new ArgumentNullException(nameof(encoding));
             }
 
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
 
             if (output != null && output.Length > 0)
             {
                 sb.Append(encoding.GetString(output));
             }
+
             if (error != null && error.Length > 0 && output != null && output.Length > 0)
             {
                 sb.AppendLine();
             }
+
             if (error != null && error.Length > 0)
             {
                 sb.Append(encoding.GetString(error));
             }
+
             return sb.ToString();
         }
 
-        public static byte[] ConvertTo(Encoding encoding, string filename)
+        [NotNull]
+        [Pure]
+        public static byte[] ConvertTo([NotNull] Encoding encoding, [NotNull] string s)
         {
-            byte[] bytesunicode = Encoding.Unicode.GetBytes(filename);
-            return Encoding.Convert(Encoding.Unicode, encoding, bytesunicode);
+            byte[] unicodeBytes = Encoding.Unicode.GetBytes(s);
+
+            return Encoding.Convert(Encoding.Unicode, encoding, unicodeBytes);
         }
 
-        public static string DecodeString(byte[] output, byte[] error, ref Encoding encoding)
+        [NotNull]
+        [Pure]
+        public static string DecodeString([CanBeNull] byte[] output, [CanBeNull] byte[] error, [NotNull] ref Encoding encoding)
         {
             if (encoding == null)
             {
-                throw new ArgumentNullException("encoding");
+                throw new ArgumentNullException(nameof(encoding));
             }
-            
+
             string outputString = "";
             if (output != null && output.Length > 0)
             {
@@ -53,21 +64,23 @@ namespace GitCommands
                 try
                 {
                     ms = new MemoryStream(output);
-                    using (StreamReader reader = new StreamReader(ms, encoding))
+                    using (var reader = new StreamReader(ms, encoding))
                     {
                         ms = null;
                         reader.Peek();
                         encoding = reader.CurrentEncoding;
                         outputString = reader.ReadToEnd();
                         if (error == null || error.Length == 0)
+                        {
                             return outputString;
+                        }
                     }
                 }
                 finally
                 {
-                    if (ms != null)
-                        ms.Dispose();
+                    ms?.Dispose();
                 }
+
                 outputString = outputString + Environment.NewLine;
             }
 
@@ -78,21 +91,23 @@ namespace GitCommands
                 try
                 {
                     ms = new MemoryStream(error);
-                    using (StreamReader reader = new StreamReader(ms, encoding))
+                    using (var reader = new StreamReader(ms, encoding))
                     {
                         ms = null;
                         reader.Peek();
+
                         // .Net automatically detect Unicode encoding in StreamReader
                         encoding = reader.CurrentEncoding;
                         errorString = reader.ReadToEnd();
                         if (output == null || output.Length == 0)
+                        {
                             return errorString;
+                        }
                     }
                 }
                 finally
                 {
-                    if (ms != null)
-                        ms.Dispose();
+                    ms?.Dispose();
                 }
             }
 

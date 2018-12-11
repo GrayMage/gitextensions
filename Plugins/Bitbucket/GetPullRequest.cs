@@ -1,14 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using RestSharp;
-using System.Linq;
-using System;
 
 namespace Bitbucket
 {
-    class PullRequest
+    internal sealed class PullRequest
     {
-        //public string Ref { get; set; }
         public static PullRequest Parse(JObject json)
         {
             var request = new PullRequest
@@ -17,7 +15,7 @@ namespace Bitbucket
                 Version = json["version"].ToString(),
                 State = json["state"].ToString(),
                 Title = json["title"].ToString(),
-                Description = json["description"] != null ? json["description"].ToString() : "",
+                Description = json["description"]?.ToString() ?? "",
                 Author = json["author"]["user"]["displayName"].ToString(),
                 SrcProjectName = json["fromRef"]["repository"]["project"]["name"].ToString(),
                 SrcRepo = json["fromRef"]["repository"]["name"].ToString(),
@@ -26,32 +24,48 @@ namespace Bitbucket
                 DestProjectKey = json["toRef"]["repository"]["project"]["key"].ToString(),
                 DestRepo = json["toRef"]["repository"]["name"].ToString(),
                 DestBranch = json["toRef"]["displayId"].ToString(),
-                CreatedDate = Convert.ToDouble(json["createdDate"].ToString().Substring(0,10))
-                
+                CreatedDate = Convert.ToDouble(json["createdDate"].ToString().Substring(0, 10))
             };
             var reviewers = json["reviewers"];
             var participants = json["participants"];
 
             if (!reviewers.HasValues)
+            {
                 request.Reviewers = "None";
+            }
             else
             {
-                reviewers.ForEach(r => request.Reviewers += r["user"]["displayName"] + " (" + r["approved"] + ")" + System.Environment.NewLine);
+                foreach (var reviewer in reviewers)
+                {
+                    request.Reviewers += reviewer["user"]["displayName"] + " (" + reviewer["approved"] + ")" + Environment.NewLine;
+                }
+
                 if (request.Reviewers.EndsWith(", "))
+                {
                     request.Reviewers = request.Reviewers.Substring(0, request.Reviewers.Length - 2);
+                }
             }
 
             if (!participants.HasValues)
+            {
                 request.Participants = "None";
+            }
             else
             {
-                participants.ForEach(r => request.Reviewers += r["user"]["displayName"] + " (" + r["approved"] + ")" + System.Environment.NewLine);
-                if (request.Reviewers.EndsWith(", "))
-                    request.Reviewers = request.Reviewers.Substring(0, request.Reviewers.Length - 2);
+                foreach (var participant in participants)
+                {
+                    request.Participants += participant["user"]["displayName"] + " (" + participant["approved"] + ")" + Environment.NewLine;
+                }
+
+                if (request.Participants.EndsWith(", "))
+                {
+                    request.Participants = request.Participants.Substring(0, request.Participants.Length - 2);
+                }
             }
 
             return request;
         }
+
         public string Id { get; set; }
         public string Version { get; set; }
         public string DestProjectKey { get; set; }
@@ -68,26 +82,20 @@ namespace Bitbucket
         public string DestRepo { get; set; }
         public string DestBranch { get; set; }
         public double CreatedDate { get; set; }
-        public string SrcDisplayName
-        {
-            get { return string.Format("{0}/{1}", SrcProjectName, SrcRepo); }
-        }
-        public string DestDisplayName
-        {
-            get { return string.Format("{0}/{1}", DestProjectName, DestRepo); }
-        }
-        public string DisplayName
-        {
-            get { return string.Format("#{0}: {1}, {2}", Id, Title, (ConvertFromUnixTimestamp(CreatedDate)).ToString("yyyy-MM-dd")); }
-        }
+
+        public string SrcDisplayName => $"{SrcProjectName}/{SrcRepo}";
+        public string DestDisplayName => $"{DestProjectName}/{DestRepo}";
+        public string DisplayName => $"#{Id}: {Title}, {ConvertFromUnixTimestamp(CreatedDate):yyyy-MM-dd}";
+
+        private static readonly DateTime _epoch = new DateTime(1970, 1, 1, 0, 0, 0, 0);
+
         public static DateTime ConvertFromUnixTimestamp(double timestamp)
         {
-            DateTime origin = new DateTime(1970, 1, 1, 0, 0, 0, 0);
-            return origin.AddSeconds(timestamp);
+            return _epoch.AddSeconds(timestamp);
         }
     }
 
-    class GetPullRequest : BitbucketRequestBase<List<PullRequest>>
+    internal class GetPullRequest : BitbucketRequestBase<List<PullRequest>>
     {
         private readonly string _projectKey;
         private readonly string _repoName;
@@ -98,24 +106,12 @@ namespace Bitbucket
             _repoName = repoName;
         }
 
-        protected override object RequestBody
-        {
-            get { return null; }
-        }
+        protected override object RequestBody => null;
 
-        protected override Method RequestMethod
-        {
-            get { return Method.GET; }
-        }
+        protected override Method RequestMethod => Method.GET;
 
-        protected override string ApiUrl
-        {
-            get
-            {
-                return string.Format("/rest/api/latest/projects/{0}/repos/{1}/pull-requests?directions=incoming&order=oldest",
-                                     _projectKey, _repoName);
-            }
-        }
+        protected override string ApiUrl => string.Format("/rest/api/latest/projects/{0}/repos/{1}/pull-requests?directions=incoming",
+            _projectKey, _repoName);
 
         protected override List<PullRequest> ParseResponse(JObject json)
         {
@@ -124,6 +120,7 @@ namespace Bitbucket
             {
                 result.Add(PullRequest.Parse(val));
             }
+
             return result;
         }
     }

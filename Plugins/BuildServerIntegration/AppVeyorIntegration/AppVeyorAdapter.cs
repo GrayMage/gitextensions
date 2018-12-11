@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reactive.Concurrency;
@@ -11,14 +10,16 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using GitCommands.Utils;
+using GitUI;
 using GitUIPluginInterfaces;
 using GitUIPluginInterfaces.BuildServerIntegration;
+using JetBrains.Annotations;
 using Newtonsoft.Json.Linq;
 
 namespace AppVeyorIntegration
 {
     [MetadataAttribute]
-    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+    [AttributeUsage(AttributeTargets.Class)]
     public class AppVeyorIntegrationMetadata : BuildServerAdapterMetadataAttribute
     {
         public AppVeyorIntegrationMetadata(string buildServerType)
@@ -31,68 +32,72 @@ namespace AppVeyorIntegration
             get
             {
                 if (EnvUtils.IsNet4FullOrHigher())
+                {
                     return null;
+                }
+
                 return ".Net 4 full framework required";
             }
         }
     }
 
     [Export(typeof(IBuildServerAdapter))]
-    [AppVeyorIntegrationMetadata("AppVeyor")]
+    [AppVeyorIntegrationMetadata(PluginName)]
     [PartCreationPolicy(CreationPolicy.NonShared)]
     internal class AppVeyorAdapter : IBuildServerAdapter
     {
+        public const string PluginName = "AppVeyor";
         private const uint ProjectsToRetrieveCount = 25;
         private const string WebSiteUrl = "https://ci.appveyor.com";
         private const string ApiBaseUrl = WebSiteUrl + "/api/projects/";
-        private const string GitHubUrl = "https://api.github.com/repos/{0}/commits/{1}";
 
         private IBuildServerWatcher _buildServerWatcher;
 
         private HttpClient _httpClientAppVeyor;
-        private HttpClient _httpClientGitHub;
 
-        private List<BuildDetails> _allBuilds = new List<BuildDetails>();
-        private HashSet<string> _fetchBuilds;
+        private List<AppVeyorBuildInfo> _allBuilds = new List<AppVeyorBuildInfo>();
+        private HashSet<ObjectId> _fetchBuilds;
         private string _accountToken;
         private static readonly Dictionary<string, Project> Projects = new Dictionary<string, Project>();
-        private Func<string, bool> IsCommitInRevisionGrid;
+        private Func<ObjectId, bool> _isCommitInRevisionGrid;
         private bool _shouldLoadTestResults;
-        private bool _shouldDisplayGitHubPullRequestBuilds;
-        private string _gitHubToken;
 
-        public void Initialize(IBuildServerWatcher buildServerWatcher, ISettingsSource config,
-            Func<string, bool> isCommitInRevisionGrid)
+        public void Initialize(
+            IBuildServerWatcher buildServerWatcher,
+            ISettingsSource config,
+            Func<ObjectId, bool> isCommitInRevisionGrid = null)
         {
             if (_buildServerWatcher != null)
+            {
                 throw new InvalidOperationException("Already initialized");
+            }
 
-            IsCommitInRevisionGrid = isCommitInRevisionGrid;
+            _buildServerWatcher = buildServerWatcher;
+            _isCommitInRevisionGrid = isCommitInRevisionGrid;
             var accountName = config.GetString("AppVeyorAccountName", null);
             _accountToken = config.GetString("AppVeyorAccountToken", null);
             var projectNamesSetting = config.GetString("AppVeyorProjectName", null);
             if (accountName.IsNullOrWhiteSpace() && projectNamesSetting.IsNullOrWhiteSpace())
+            {
                 return;
+            }
 
             _shouldLoadTestResults = config.GetBool("AppVeyorLoadTestsResults", false);
-            _gitHubToken = config.GetString("AppVeyorGitHubToken", null);
-            _shouldDisplayGitHubPullRequestBuilds = config.GetBool("AppVeyorDisplayGitHubPullRequests", false)
-                    && !string.IsNullOrWhiteSpace(_gitHubToken);
 
-            _fetchBuilds = new HashSet<string>();
-            _buildServerWatcher = buildServerWatcher;
+            _fetchBuilds = new HashSet<ObjectId>();
 
             _httpClientAppVeyor = GetHttpClient(WebSiteUrl, _accountToken);
 
-            _httpClientGitHub = GetHttpClient("https://api.github.com/", _gitHubToken);
-            _httpClientGitHub.DefaultRequestHeaders.Add("User-Agent", "Anything");
-
-            var useAllProjets = string.IsNullOrWhiteSpace(projectNamesSetting);
+            var useAllProjects = string.IsNullOrWhiteSpace(projectNamesSetting);
             string[] projectNames = null;
-            if (!useAllProjets)
-                projectNames = projectNamesSetting.Split(new[] {'|'}, StringSplitOptions.RemoveEmptyEntries);
+            if (!useAllProjects)
+            {
+                projectNames = _buildServerWatcher.ReplaceVariables(projectNamesSetting)
+                    .Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+            }
+
             if (Projects.Count == 0 ||
-                (!useAllProjets && Projects.Keys.Intersect(projectNames).Count() != projectNames.Length))
+                (!useAllProjects && Projects.Keys.Intersect(projectNames).Count() != projectNames.Length))
             {
                 Projects.Clear();
                 if (_accountToken.IsNullOrWhiteSpace())
@@ -105,40 +110,45 @@ namespace AppVeyorIntegration
                     {
                         return;
                     }
-                    GetResponseAsync(_httpClientAppVeyor, ApiBaseUrl, CancellationToken.None)
-                        .ContinueWith(
-                            task =>
+
+                    ThreadHelper.JoinableTaskFactory.Run(
+                        async () =>
+                        {
+                            var result = await GetResponseAsync(_httpClientAppVeyor, ApiBaseUrl, CancellationToken.None).ConfigureAwait(false);
+
+                            if (result.IsNullOrWhiteSpace())
                             {
-                                if (task.Result.IsNullOrWhiteSpace())
-                                    return;
+                                return;
+                            }
 
-                                var projects = JArray.Parse(task.Result);
-                                foreach (var project in projects)
+                            var projects = JArray.Parse(result);
+                            foreach (var project in projects)
+                            {
+                                var projectId = project["slug"].ToString();
+                                projectId = accountName.Combine("/", projectId);
+                                var projectName = project["name"].ToString();
+                                var projectObj = new Project
                                 {
-                                    var projectId = project["slug"].ToString();
-                                    projectId = accountName.Combine("/", projectId);
-                                    var projectName = project["name"].ToString();
-                                    var projectObj = new Project
-                                    {
-                                        Name = projectName,
-                                        Id = projectId,
-                                        QueryUrl = BuildQueryUrl(projectId)
-                                    };
+                                    Name = projectName,
+                                    Id = projectId,
+                                    QueryUrl = BuildQueryUrl(projectId)
+                                };
 
-                                    if (useAllProjets || projectNames.Contains(projectObj.Name))
-                                    {
-                                        Projects.Add(projectObj.Name, projectObj);
-                                    }
+                                if (useAllProjects || projectNames.Contains(projectObj.Name))
+                                {
+                                    Projects.Add(projectObj.Name, projectObj);
                                 }
-                            }).Wait();
+                            }
+                        });
                 }
             }
-            var builds = Projects.Where(p => useAllProjets || projectNames.Contains(p.Value.Name)).Select(p => p.Value);
+
+            var builds = Projects.Where(p => useAllProjects || projectNames.Contains(p.Value.Name)).Select(p => p.Value);
             _allBuilds =
                 FilterBuilds(builds.SelectMany(project => QueryBuildsResults(project)));
         }
 
-        private void FillProjectsFromSettings(string accountName, string[] projectNames)
+        private static void FillProjectsFromSettings(string accountName, [InstantHandle] IEnumerable<string> projectNames)
         {
             foreach (var projectName in projectNames)
             {
@@ -152,7 +162,7 @@ namespace AppVeyorIntegration
             }
         }
 
-        HttpClient GetHttpClient(string baseUrl, string accountToken)
+        private static HttpClient GetHttpClient(string baseUrl, string accountToken)
         {
             var httpClient = new HttpClient(new HttpClientHandler { UseDefaultCredentials = true })
             {
@@ -163,10 +173,11 @@ namespace AppVeyorIntegration
             {
                 httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accountToken);
             }
+
             return httpClient;
         }
 
-        private string BuildQueryUrl(string projectId)
+        private static string BuildQueryUrl(string projectId)
         {
             return ApiBaseUrl + projectId + "/history?recordsNumber=" + ProjectsToRetrieveCount;
         }
@@ -178,112 +189,85 @@ namespace AppVeyorIntegration
             public string QueryUrl;
         }
 
-        private IEnumerable<BuildDetails> QueryBuildsResults(Project project)
+        private IEnumerable<AppVeyorBuildInfo> QueryBuildsResults(Project project)
         {
             try
             {
-                var buildTask = GetResponseAsync(_httpClientAppVeyor, project.QueryUrl, CancellationToken.None)
-                    .ContinueWith(
-                        task =>
+                return ThreadHelper.JoinableTaskFactory.Run(
+                    async () =>
+                    {
+                        var result = await GetResponseAsync(_httpClientAppVeyor, project.QueryUrl, CancellationToken.None).ConfigureAwait(false);
+
+                        if (string.IsNullOrWhiteSpace(result))
                         {
-                            if (string.IsNullOrWhiteSpace(task.Result))
-                            {
-                                return Enumerable.Empty<BuildDetails>();
-                            }
+                            return Enumerable.Empty<AppVeyorBuildInfo>();
+                        }
 
-                            var jobDescription = JObject.Parse(task.Result);
-                            var builds = jobDescription["builds"];
-                            var myBuilds = builds.Children();
-                            var baseApiUrl = ApiBaseUrl + project.Id;
-                            var baseWebUrl = WebSiteUrl + "/project/" + project.Id + "/build/";
-                            var isGitHubRepository = jobDescription["project"]["repositoryType"].ToObject<string>() ==
-                                                     "gitHub";
-                            var repoName = jobDescription["project"]["repositoryName"].ToObject<string>();
+                        var builds = JObject.Parse(result)["builds"].Children();
+                        var baseApiUrl = ApiBaseUrl + project.Id;
+                        var baseWebUrl = WebSiteUrl + "/project/" + project.Id + "/build/";
 
-                            return myBuilds.Select(b =>
+                        var buildDetails = new List<AppVeyorBuildInfo>();
+                        foreach (var b in builds)
+                        {
+                            try
                             {
-                                string commitSha1 = null;
+                                if (!ObjectId.TryParse((b["pullRequestHeadCommitId"] ?? b["commitId"]).ToObject<string>(), out var objectId) || !_isCommitInRevisionGrid(objectId))
+                                {
+                                    continue;
+                                }
+
                                 var pullRequestId = b["pullRequestId"];
-                                if (isGitHubRepository && pullRequestId != null)
-                                {
-                                    if (!_shouldDisplayGitHubPullRequestBuilds)
-                                        return null;
-                                    try
-                                    {
-                                        var githubCommitUrl = string.Format(GitHubUrl, repoName, b["commitId"]);
-                                        var gitHubTask = GetResponseAsync(_httpClientGitHub, githubCommitUrl, CancellationToken.None).ContinueWith(
-                                            task2 =>
-                                            {
-                                                var content = task2.Result;
-                                                if (string.IsNullOrWhiteSpace(content))
-                                                    return;
-                                                var commitResult = JObject.Parse(content);
-                                                commitSha1 = commitResult["parents"][1]["sha"].ToObject<string>();
-                                            });
-                                        gitHubTask.Wait();
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Console.WriteLine(ex.Message);
-                                    }
-                                }
-                                else
-                                {
-                                    commitSha1 = b["commitId"].ToObject<string>();
-                                }
-                                if (commitSha1 == null || !IsCommitInRevisionGrid(commitSha1))
-                                {
-                                    return null;
-                                }
-
                                 var version = b["version"].ToObject<string>();
                                 var status = ParseBuildStatus(b["status"].ToObject<string>());
                                 long? duration = null;
                                 if (status == BuildInfo.BuildStatus.Success || status == BuildInfo.BuildStatus.Failure)
+                                {
                                     duration = GetBuildDuration(b);
+                                }
 
-                                return new BuildDetails
+                                buildDetails.Add(new AppVeyorBuildInfo
                                 {
                                     Id = version,
                                     BuildId = b["buildId"].ToObject<string>(),
                                     Branch = b["branch"].ToObject<string>(),
-                                    CommitId = commitSha1,
-                                    CommitHashList = new[] { commitSha1 },
+                                    CommitId = objectId,
+                                    CommitHashList = new[] { objectId },
                                     Status = status,
-                                    StartDate = b["started"] == null ? DateTime.MinValue : b["started"].ToObject<DateTime>(),
+                                    StartDate = b["started"]?.ToObject<DateTime>() ?? DateTime.MinValue,
                                     BaseWebUrl = baseWebUrl,
                                     Url = WebSiteUrl + "/project/" + project.Id + "/build/" + version,
                                     BaseApiUrl = baseApiUrl,
                                     AppVeyorBuildReportUrl = baseApiUrl + "/build/" + version,
-                                    PullRequestText = (pullRequestId != null ? " PR#" + pullRequestId.Value<string>() : string.Empty),
+                                    PullRequestText = pullRequestId != null ? " PR#" + pullRequestId.Value<string>() : string.Empty,
                                     Duration = duration,
                                     TestsResultText = string.Empty
-                                };
-                            })
-                            .Where(x => x != null)
-                            .ToList();
-                        },
-                        TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.AttachedToParent);
-                return buildTask.Result.Where(b => b != null).ToList();
+                                });
+                            }
+                            catch (Exception)
+                            {
+                                // Failure on reading data on a build detail should not prevent to display the others build results
+                            }
+                        }
+
+                        return buildDetails;
+                    });
             }
             catch
             {
-                return Enumerable.Empty<BuildDetails>();
+                return Enumerable.Empty<AppVeyorBuildInfo>();
             }
         }
 
         /// <summary>
         /// Gets a unique key which identifies this build server.
         /// </summary>
-        public string UniqueKey
-        {
-            get { return _httpClientAppVeyor.BaseAddress.Host; }
-        }
+        public string UniqueKey => _httpClientAppVeyor.BaseAddress.Host;
 
         public IObservable<BuildInfo> GetFinishedBuildsSince(IScheduler scheduler, DateTime? sinceDate = null)
         {
-            //AppVeyor api is different than TeamCity one and all build results are fetch in one call without
-            //filter parameters possible (so this call is useless!)
+            // AppVeyor api is different than TeamCity one and all build results are fetch in one call without
+            // filter parameters possible (so this call is useless!)
             return Observable.Empty<BuildInfo>();
         }
 
@@ -295,7 +279,7 @@ namespace AppVeyorIntegration
         private IObservable<BuildInfo> GetBuilds(IScheduler scheduler)
         {
             return Observable.Create<BuildInfo>((observer, cancellationToken) =>
-                Task<IDisposable>.Factory.StartNew(
+                Task.Run(
                     () => scheduler.Schedule(() => ObserveBuilds(observer, cancellationToken))));
         }
 
@@ -304,15 +288,17 @@ namespace AppVeyorIntegration
             try
             {
                 if (_allBuilds == null)
+                {
                     return;
+                }
 
-                //Display all builds found
+                // Display all builds found
                 foreach (var build in _allBuilds)
                 {
                     UpdateDisplay(observer, build);
                 }
 
-                //Update finished build with tests results
+                // Update finished build with tests results
                 if (_shouldLoadTestResults)
                 {
                     foreach (var build in _allBuilds.Where(b => b.Status == BuildInfo.BuildStatus.Success
@@ -323,7 +309,7 @@ namespace AppVeyorIntegration
                     }
                 }
 
-                //Manage in progress builds...
+                // Manage in progress builds...
                 var inProgressBuilds = _allBuilds.Where(b => b.Status == BuildInfo.BuildStatus.InProgress).ToList();
                 _allBuilds = null;
                 do
@@ -334,8 +320,10 @@ namespace AppVeyorIntegration
                         UpdateDescription(build, cancellationToken);
                         UpdateDisplay(observer, build);
                     }
+
                     inProgressBuilds = inProgressBuilds.Where(b => b.Status == BuildInfo.BuildStatus.InProgress).ToList();
-                } while (inProgressBuilds.Any());
+                }
+                while (inProgressBuilds.Any());
 
                 observer.OnCompleted();
             }
@@ -349,15 +337,15 @@ namespace AppVeyorIntegration
             }
         }
 
-        private static void UpdateDisplay(IObserver<BuildInfo> observer, BuildDetails build)
+        private static void UpdateDisplay(IObserver<BuildInfo> observer, AppVeyorBuildInfo build)
         {
             build.UpdateDescription();
             observer.OnNext(build);
         }
 
-        private List<BuildDetails> FilterBuilds(IEnumerable<BuildDetails> allBuilds)
+        private List<AppVeyorBuildInfo> FilterBuilds(IEnumerable<AppVeyorBuildInfo> allBuilds)
         {
-            var filteredBuilds = new List<BuildDetails>();
+            var filteredBuilds = new List<AppVeyorBuildInfo>();
             foreach (var build in allBuilds.OrderByDescending(b => b.StartDate))
             {
                 if (!_fetchBuilds.Contains(build.CommitId))
@@ -366,14 +354,18 @@ namespace AppVeyorIntegration
                     _fetchBuilds.Add(build.CommitId);
                 }
             }
+
             return filteredBuilds;
         }
 
-        private void UpdateDescription(BuildDetails buildDetails, CancellationToken cancellationToken)
+        private void UpdateDescription(AppVeyorBuildInfo buildDetails, CancellationToken cancellationToken)
         {
-            var buildDetailsParsed = FetchBuildDetailsManagingVersionUpdate(buildDetails, cancellationToken);
+            var buildDetailsParsed = ThreadHelper.JoinableTaskFactory.Run(() => FetchBuildDetailsManagingVersionUpdateAsync(buildDetails, cancellationToken));
             if (buildDetailsParsed == null)
+            {
                 return;
+            }
+
             var buildData = buildDetailsParsed["build"];
             var buildDescription = buildData["jobs"].Last();
 
@@ -386,15 +378,17 @@ namespace AppVeyorIntegration
                 buildDetails.Duration = GetBuildDuration(buildData);
             }
 
-            string testResults = string.Empty;
-            int nbTests = buildDescription["testsCount"].ToObject<int>();
-            if (nbTests != 0)
+            int testCount = buildDescription["testsCount"].ToObject<int>();
+            if (testCount != 0)
             {
-                int nbFailedTests = buildDescription["failedTestsCount"].ToObject<int>();
-                int nbSkippedTests = nbTests - buildDescription["passedTestsCount"].ToObject<int>();
-                testResults = " : " + nbTests + " tests";
-                if (nbFailedTests != 0 || nbSkippedTests != 0)
-                    testResults += string.Format(" ( {0} failed, {1} skipped )", nbFailedTests, nbSkippedTests);
+                int failedTestCount = buildDescription["failedTestsCount"].ToObject<int>();
+                int skippedTestCount = testCount - buildDescription["passedTestsCount"].ToObject<int>();
+                var testResults = " : " + testCount + " tests";
+                if (failedTestCount != 0 || skippedTestCount != 0)
+                {
+                    testResults += string.Format(" ( {0} failed, {1} skipped )", failedTestCount, skippedTestCount);
+                }
+
                 buildDetails.TestsResultText = " " + testResults;
             }
         }
@@ -406,23 +400,23 @@ namespace AppVeyorIntegration
             return (long)(updateTime - startTime).TotalMilliseconds;
         }
 
-        private JObject FetchBuildDetailsManagingVersionUpdate(BuildDetails buildDetails, CancellationToken cancellationToken)
+        private async Task<JObject> FetchBuildDetailsManagingVersionUpdateAsync(AppVeyorBuildInfo buildDetails, CancellationToken cancellationToken)
         {
             try
             {
-                return JObject.Parse(GetResponseAsync(_httpClientAppVeyor, buildDetails.AppVeyorBuildReportUrl, cancellationToken).Result);
+                return JObject.Parse(await GetResponseAsync(_httpClientAppVeyor, buildDetails.AppVeyorBuildReportUrl, cancellationToken).ConfigureAwait(false));
             }
-            catch (Exception)
+            catch
             {
                 var buildHistoryUrl = buildDetails.BaseApiUrl + "/history?recordsNumber=1&startBuildId=" + (int.Parse(buildDetails.BuildId) + 1);
-                var builds = JObject.Parse(GetResponseAsync(_httpClientAppVeyor, buildHistoryUrl, cancellationToken).Result);
+                var builds = JObject.Parse(await GetResponseAsync(_httpClientAppVeyor, buildHistoryUrl, cancellationToken).ConfigureAwait(false));
 
                 var version = builds["builds"][0]["version"].ToObject<string>();
                 buildDetails.Id = version;
                 buildDetails.AppVeyorBuildReportUrl = buildDetails.BaseApiUrl + "/build/" + version;
                 buildDetails.Url = buildDetails.BaseWebUrl + version;
 
-                return JObject.Parse(GetResponseAsync(_httpClientAppVeyor, buildDetails.AppVeyorBuildReportUrl, cancellationToken).Result);
+                return JObject.Parse(await GetResponseAsync(_httpClientAppVeyor, buildDetails.AppVeyorBuildReportUrl, cancellationToken).ConfigureAwait(false));
             }
         }
 
@@ -459,19 +453,19 @@ namespace AppVeyorIntegration
 
         private Task<Stream> GetStreamFromHttpResponseAsync(HttpClient httpClient, Task<HttpResponseMessage> task, string restServicePath, CancellationToken cancellationToken)
         {
-#if !__MonoCS__
             var retry = task.IsCanceled && !cancellationToken.IsCancellationRequested;
 
             if (retry)
+            {
                 return GetStreamAsync(httpClient, restServicePath, cancellationToken);
+            }
 
-            if (task.Status == TaskStatus.RanToCompletion && task.Result.IsSuccessStatusCode)
-                return task.Result.Content.ReadAsStreamAsync();
+            if (task.Status == TaskStatus.RanToCompletion && task.CompletedResult().IsSuccessStatusCode)
+            {
+                return task.CompletedResult().Content.ReadAsStreamAsync();
+            }
 
             return null;
-#else
-            return null;
-#endif
         }
 
         private Task<string> GetResponseAsync(HttpClient httpClient, string relativePath, CancellationToken cancellationToken)
@@ -483,7 +477,10 @@ namespace AppVeyorIntegration
                 task =>
                 {
                     if (task.Status != TaskStatus.RanToCompletion)
+                    {
                         return string.Empty;
+                    }
+
                     using (var responseStream = task.Result)
                     {
                         return new StreamReader(responseStream).ReadToEnd();
@@ -498,52 +495,47 @@ namespace AppVeyorIntegration
         {
             GC.SuppressFinalize(this);
 
-            if (_httpClientAppVeyor != null)
-            {
-                _httpClientAppVeyor.Dispose();
-            }
-            if (_httpClientGitHub != null)
-            {
-                _httpClientGitHub.Dispose();
-            }
+            _httpClientAppVeyor?.Dispose();
         }
     }
 
-    internal class BuildDetails : BuildInfo
+    internal sealed class AppVeyorBuildInfo : BuildInfo
     {
         private static readonly IBuildDurationFormatter _buildDurationFormatter = new BuildDurationFormatter();
+
         private int _buildProgressCount;
-        //From build build list
+
         public string BuildId { get; set; }
-        public string CommitId { get; set; }
+        public ObjectId CommitId { get; set; }
         public string AppVeyorBuildReportUrl { get; set; }
-        public bool IsRunning { get { return Status == BuildStatus.InProgress; } }
         public string Branch { get; set; }
         public string BaseApiUrl { get; set; }
         public string BaseWebUrl { get; set; }
         public string PullRequestText { get; set; }
         public string TestsResultText { get; set; }
 
+        public bool IsRunning => Status == BuildStatus.InProgress;
+
         public void ChangeProgressCounter()
         {
-            _buildProgressCount = _buildProgressCount % 3 + 1;
+            _buildProgressCount = (_buildProgressCount % 3) + 1;
         }
 
         public void UpdateDescription()
         {
-            Description = Id + PullRequestText + " " + DisplayStatus + " " + _buildDurationFormatter.Format(Duration) + TestsResultText;
+            Description = Id + " " + DisplayStatus + " " + _buildDurationFormatter.Format(Duration) + TestsResultText + PullRequestText;
         }
 
         private string DisplayStatus
         {
             get
             {
-
                 if (Status != BuildStatus.InProgress)
                 {
                     return Status.ToString("G");
                 }
-                return Status.ToString("G") + new string('.', _buildProgressCount) + new string(' ', 3 - _buildProgressCount);
+
+                return "In progress" + new string('.', _buildProgressCount) + new string(' ', 3 - _buildProgressCount);
             }
         }
     }

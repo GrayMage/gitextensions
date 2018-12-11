@@ -15,7 +15,6 @@ namespace GitCommandsTests
         private IFileSystem _fileSystem;
         private FileAssociatedIconProvider _iconProvider;
 
-
         [SetUp]
         public void Setup()
         {
@@ -26,33 +25,20 @@ namespace GitCommandsTests
             _iconProvider.ResetCache();
         }
 
-
         [TestCase(null, null)]
         [TestCase("", "")]
-        [TestCase("aaaa", "")]
-        [Platform(Include = "Mono")]
-        public void Get_should_always_return_null_under_mono(string workingDirectory, string relativeFilePath)
-        {
-            _iconProvider.Get(workingDirectory, relativeFilePath).Should().BeNull();
-        }
-
-        [TestCase(null, null)]
-        [TestCase("", "")]
-        [Platform(Exclude = "Mono")]
         public void Get_should_return_null_if_path_null_or_empty(string workingDirectory, string relativeFilePath)
         {
             _iconProvider.Get(workingDirectory, relativeFilePath).Should().BeNull();
         }
 
         [Test]
-        [Platform(Exclude = "Mono")]
         public void Get_should_return_null_for_extensionless_file()
         {
             _iconProvider.Get(@"c:\folder", "file").Should().BeNull();
         }
 
         [Test]
-        [Platform(Exclude = "Mono")]
         public void Get_if_file_does_not_exist_create_temp()
         {
             const string folder = @"c:\non_existent_folder";
@@ -66,17 +52,13 @@ namespace GitCommandsTests
         }
 
         [Test]
-        [Platform(Exclude = "Mono")]
         public void Get_if_temp_file_cant_be_delete_ignore()
         {
             const string folder = @"c:\non_existent_folder";
             const string file = @"file.txt";
             _file.Exists(Arg.Any<string>()).Returns(false);
             _file.When(x => x.Delete(Arg.Any<string>()))
-                .Do(x =>
-                {
-                    throw new DivideByZeroException("boom");
-                });
+                .Do(x => throw new DivideByZeroException("boom"));
 
             _iconProvider.Get(folder, file).Should().BeNull();
 
@@ -85,7 +67,6 @@ namespace GitCommandsTests
         }
 
         [Test]
-        [Platform(Exclude = "Mono")]
         public void Get_should_add_entry_for_extension_once()
         {
             _iconProvider = new FileAssociatedIconProvider(); // use real file system

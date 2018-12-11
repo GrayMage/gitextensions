@@ -1,21 +1,13 @@
 ﻿using System;
-using System.Diagnostics;
-using System.Drawing;
-using System.Threading;
+using System.Collections.Generic;
 using System.Windows.Forms;
 using GitCommands;
-
 using GitUI.UserControls;
-
-using ResourceManager;
-using System.Collections.Generic;
+using GitUIPluginInterfaces;
+using JetBrains.Annotations;
 
 namespace GitUI
 {
-    delegate void DataCallback(string text);
-    /// <summary>
-    ///
-    /// </summary>
     /// <param name="isError">if command finished with error</param>
     /// <param name="form">this form</param>
     /// <returns>if handled</returns>
@@ -33,101 +25,107 @@ namespace GitUI
 
         protected FormProcess()
             : base(true)
-        { }
+        {
+        }
 
-        public FormProcess(ConsoleOutputControl outputControl, string process, string arguments, string aWorkingDirectory, string input, bool useDialogSettings)
+        public FormProcess(ConsoleOutputControl outputControl, [CanBeNull] string process, ArgumentString arguments, string workingDirectory, string input, bool useDialogSettings)
             : base(outputControl, useDialogSettings)
         {
-            ProcessCallback = processStart;
-            AbortCallback = processAbort;
+            ProcessCallback = ProcessStart;
+            AbortCallback = ProcessAbort;
             ProcessString = process ?? AppSettings.GitCommand;
             ProcessArguments = arguments;
             Remote = "";
             ProcessInput = input;
-            WorkingDirectory = aWorkingDirectory;
-            Text = Text + " (" + WorkingDirectory + ")";
+            WorkingDirectory = workingDirectory;
+
+            var displayPath = PathUtil.GetDisplayPath(WorkingDirectory);
+            if (!string.IsNullOrWhiteSpace(displayPath))
+            {
+                Text += $" ({displayPath})";
+            }
 
             ConsoleOutput.ProcessExited += delegate { OnExit(ConsoleOutput.ExitCode); };
             ConsoleOutput.DataReceived += DataReceivedCore;
         }
 
-        public FormProcess(string process, string arguments, string aWorkingDirectory, string input, bool useDialogSettings)
-            : this(null, process, arguments, aWorkingDirectory, input, useDialogSettings)
+        public FormProcess(string process, ArgumentString arguments, string workingDirectory, string input, bool useDialogSettings)
+            : this(null, process, arguments, workingDirectory, input, useDialogSettings)
         {
         }
 
-        public static bool ShowDialog(IWin32Window owner, GitModule module, string arguments)
+        public static bool ShowDialog([CanBeNull] IWin32Window owner, GitModule module, ArgumentString arguments)
         {
             return ShowDialog(owner, null, arguments, module.WorkingDir, null, true);
         }
 
-        public static bool ShowDialog(IWin32Window owner, GitModule module, string process, string arguments)
+        public static bool ShowDialog([CanBeNull] IWin32Window owner, GitModule module, string process, ArgumentString arguments)
         {
             return ShowDialog(owner, process, arguments, module.WorkingDir, null, true);
         }
 
-        public static bool ShowDialog(GitModuleForm owner, string arguments)
+        public static bool ShowDialog(GitModuleForm owner, ArgumentString arguments)
         {
-            return ShowDialog(owner, (string)null, arguments);
+            return ShowDialog(owner, null, arguments);
         }
 
-        public static bool ShowDialog(GitModuleForm owner, string process, string arguments)
+        public static bool ShowDialog(GitModuleForm owner, string process, ArgumentString arguments)
         {
             return ShowDialog(owner, process, arguments, owner.Module.WorkingDir, null, true);
         }
 
-        public static bool ShowDialog(GitModuleForm owner, string arguments, bool useDialogSettings)
+        public static bool ShowDialog(GitModuleForm owner, ArgumentString arguments, bool useDialogSettings)
         {
             return ShowDialog(owner, owner.Module, arguments, useDialogSettings);
         }
 
-        public static bool ShowDialog(IWin32Window owner, GitModule module, string arguments, bool useDialogSettings)
+        public static bool ShowDialog([CanBeNull] IWin32Window owner, GitModule module, ArgumentString arguments, bool useDialogSettings)
         {
             return ShowDialog(owner, null, arguments, module.WorkingDir, null, useDialogSettings);
         }
 
-
-        public static bool ShowDialog(IWin32Window owner, string process, string arguments, string aWorkingDirectory, string input, bool useDialogSettings)
+        public static bool ShowDialog([CanBeNull] IWin32Window owner, string process, ArgumentString arguments, string workingDirectory, string input, bool useDialogSettings)
         {
-            using (var formProcess = new FormProcess(process, arguments, aWorkingDirectory, input, useDialogSettings))
+            using (var formProcess = new FormProcess(process, arguments, workingDirectory, input, useDialogSettings))
             {
                 formProcess.ShowDialog(owner);
                 return !formProcess.ErrorOccurred();
             }
         }
 
-        public static bool ShowStandardProcessDialog(IWin32Window owner, string process, string arguments, string aWorkingDirectory, string input, bool useDialogSettings)
+        public static bool ShowStandardProcessDialog([CanBeNull] IWin32Window owner, string process, ArgumentString arguments, string workingDirectory, string input, bool useDialogSettings)
         {
             var outputCtrl = new EditboxBasedConsoleOutputControl();
-            using (var formProcess = new FormProcess(outputCtrl, process, arguments, aWorkingDirectory, input, useDialogSettings))
+            using (var formProcess = new FormProcess(outputCtrl, process, arguments, workingDirectory, input, useDialogSettings))
             {
                 formProcess.ShowDialog(owner);
                 return !formProcess.ErrorOccurred();
             }
         }
 
-
-        public static FormProcess ShowModeless(IWin32Window owner, string process, string arguments, string aWorkingDirectory, string input, bool useDialogSettings)
+        public static FormProcess ShowModeless([CanBeNull] IWin32Window owner, string process, ArgumentString arguments, string workingDirectory, string input, bool useDialogSettings)
         {
-            FormProcess formProcess = new FormProcess(process, arguments, aWorkingDirectory, input, useDialogSettings);
+            var formProcess = new FormProcess(process, arguments, workingDirectory, input, useDialogSettings)
+            {
+                ControlBox = true
+            };
 
-            formProcess.ControlBox = true;
             formProcess.Show(owner);
 
             return formProcess;
         }
 
-        public static FormProcess ShowModeless(GitModuleForm owner, string arguments)
+        public static FormProcess ShowModeless(GitModuleForm owner, ArgumentString arguments)
         {
             return ShowModeless(owner, null, arguments, owner.Module.WorkingDir, null, true);
         }
 
-        public static string ReadDialog(GitModuleForm owner, string arguments)
+        public static string ReadDialog(GitModuleForm owner, ArgumentString arguments)
         {
             return ReadDialog(owner, null, arguments, owner.Module, null, true);
         }
 
-        public static string ReadDialog(IWin32Window owner, string process, string arguments, GitModule module, string input, bool useDialogSettings)
+        public static string ReadDialog([CanBeNull] IWin32Window owner, string process, ArgumentString arguments, GitModule module, string input, bool useDialogSettings)
         {
             using (var formProcess = new FormProcess(process, arguments, module.WorkingDir, input, useDialogSettings))
             {
@@ -138,16 +136,35 @@ namespace GitUI
 
         protected virtual void BeforeProcessStart()
         {
-
         }
 
-        private void processStart(FormStatus form)
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            switch (keyData)
+            {
+                case Keys.Escape:
+                    {
+                        Close();
+                        return true;
+                    }
+
+                default:
+                    {
+                        return base.ProcessCmdKey(ref msg, keyData);
+                    }
+            }
+        }
+
+        private void ProcessStart(FormStatus form)
         {
             BeforeProcessStart();
-            string QuotedProcessString = ProcessString;
-            if (QuotedProcessString.IndexOf(' ') != -1)
-                QuotedProcessString = QuotedProcessString.Quote();
-            AddMessageLine(QuotedProcessString + " " + ProcessArguments);
+            string quotedProcessString = ProcessString;
+            if (quotedProcessString.IndexOf(' ') != -1)
+            {
+                quotedProcessString = quotedProcessString.Quote();
+            }
+
+            AddMessageLine(quotedProcessString + " " + ProcessArguments);
 
             try
             {
@@ -155,7 +172,7 @@ namespace GitUI
 
                 if (!string.IsNullOrEmpty(ProcessInput))
                 {
-                    throw new NotSupportedException("No non-NULL usages of ProcessInput are currently expected.");	// Not implemented with all terminal variations, so let's postpone until there's at least one non-null case
+                    throw new NotSupportedException("No non-NULL usages of ProcessInput are currently expected.");  // Not implemented with all terminal variations, so let's postpone until there's at least one non-null case
 /*
                     Thread.Sleep(500);
                     Process.StandardInput.Write(ProcessInput);
@@ -170,7 +187,7 @@ namespace GitUI
             }
         }
 
-        private void processAbort(FormStatus form)
+        private void ProcessAbort(FormStatus form)
         {
             KillProcess();
         }
@@ -182,7 +199,7 @@ namespace GitUI
                 ConsoleOutput.KillProcess();
 
                 var module = new GitModule(WorkingDirectory);
-                module.UnlockIndex(true);
+                module.UnlockIndex(includeSubmodules: true);
             }
             catch
             {
@@ -190,9 +207,6 @@ namespace GitUI
             }
         }
 
-        /// <summary>
-        ///
-        /// </summary>
         /// <param name="isError">if command finished with error</param>
         /// <returns>if handled</returns>
         protected virtual bool HandleOnExit(ref bool isError)
@@ -202,7 +216,6 @@ namespace GitUI
 
         private void OnExit(int exitcode)
         {
-
             this.InvokeAsync(() =>
             {
                 bool isError;
@@ -211,7 +224,9 @@ namespace GitUI
                     isError = exitcode != 0;
 
                     if (HandleOnExit(ref isError))
+                    {
                         return;
+                    }
                 }
                 catch
                 {
@@ -219,27 +234,32 @@ namespace GitUI
                 }
 
                 Done(!isError);
-            });
+            }).FileAndForget();
         }
 
         protected virtual void DataReceived(object sender, TextEventArgs e)
         {
-
         }
 
         private void DataReceivedCore(object sender, TextEventArgs e)
         {
-            if(e.Text.Contains("%") || e.Text.Contains("remote: Counting objects"))
-                SetProgress(e.Text);
+            if (e.Text.Contains("%") || e.Text.Contains("remote: Counting objects"))
+            {
+                ThreadHelper.JoinableTaskFactory.RunAsync(() => SetProgressAsync(e.Text)).FileAndForget();
+            }
             else
             {
                 const string ansiSuffix = "\u001B[K";
                 string line = e.Text.Replace(ansiSuffix, "");
 
-                if(ConsoleOutput.IsDisplayingFullProcessOutput)
+                if (ConsoleOutput.IsDisplayingFullProcessOutput)
+                {
                     OutputLog.Append(line); // To the log only, display control displays it by itself
+                }
                 else
+                {
                     AppendOutput(line); // Both to log and display control
+                }
             }
 
             DataReceived(sender, e);
@@ -260,21 +280,6 @@ namespace GitUI
         public static bool IsOperationAborted(string dialogResult)
         {
             return dialogResult.Trim('\r', '\n') == "Aborted";
-        }
-
-        private void InitializeComponent()
-        {
-            this.SuspendLayout();
-            //
-            // FormProcess
-            //
-            this.AutoScaleDimensions = new System.Drawing.SizeF(96F, 96F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
-            this.ClientSize = new System.Drawing.Size(565, 326);
-            this.Name = "FormProcess";
-            this.ResumeLayout(false);
-            this.PerformLayout();
-
         }
     }
 }

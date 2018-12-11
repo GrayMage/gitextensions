@@ -6,23 +6,12 @@ namespace GitUI.UserControls
 {
     public sealed class TextEventArgs : EventArgs
     {
-        [NotNull]
-        private readonly string _text;
-
         public TextEventArgs([NotNull] string text)
         {
-            if(text == null)
-                throw new ArgumentNullException("text");
-            _text = text;
+            Text = text ?? throw new ArgumentNullException(nameof(text));
         }
 
         [NotNull]
-        public string Text
-        {
-            get
-            {
-                return _text;
-            }
-        }
+        public string Text { get; }
     }
 }

@@ -22,20 +22,14 @@ namespace GitUI.CommandsDialogs
                 OnListChanged(new ListChangedEventArgs(ListChangedType.Reset, -1));
             }
 
-            protected override bool SupportsSortingCore
-            {
-                get { return true; }
-            }
+            protected override bool SupportsSortingCore => true;
 
             protected override void ApplySortCore(PropertyDescriptor propertyDescriptor, ListSortDirection direction)
             {
                 LostObjects.Sort(LostObjectsComparer.Create(propertyDescriptor, direction == ListSortDirection.Descending));
             }
 
-            private List<LostObject> LostObjects
-            {
-                get { return (List<LostObject>)Items; }
-            }
+            private List<LostObject> LostObjects => (List<LostObject>)Items;
 
             private static class LostObjectsComparer
             {
@@ -43,8 +37,8 @@ namespace GitUI.CommandsDialogs
 
                 static LostObjectsComparer()
                 {
-                    AddSortableProperty(lostObject => lostObject.RawType, (x, y) => string.Compare(x.RawType, y.RawType, StringComparison.CurrentCulture));
-                    AddSortableProperty(lostObject => lostObject.Hash, (x, y) => string.Compare(x.Hash, y.Hash, StringComparison.InvariantCulture));
+                    AddSortableProperty(lostObject => lostObject.RawType, (x, y) => string.Compare(x.RawType, y.RawType, StringComparison.Ordinal));
+                    AddSortableProperty(lostObject => lostObject.ObjectId, (x, y) => x.ObjectId.CompareTo(y.ObjectId));
                     AddSortableProperty(lostObject => lostObject.Author, (x, y) => string.Compare(x.Author, y.Author, StringComparison.CurrentCulture));
                     AddSortableProperty(lostObject => lostObject.Date, (x, y) => x.Date.HasValue && y.Date.HasValue
                         ? DateTime.Compare(x.Date.Value, y.Date.Value)
@@ -59,9 +53,11 @@ namespace GitUI.CommandsDialogs
                 /// <param name="isReversedComparing">Use reversed sorting order.</param>
                 public static Comparison<LostObject> Create(PropertyDescriptor propertyDescriptor, bool isReversedComparing)
                 {
-                    Comparison<LostObject> comparer;
-                    if (PropertyComparers.TryGetValue(propertyDescriptor.Name, out comparer))
+                    if (PropertyComparers.TryGetValue(propertyDescriptor.Name, out var comparer))
+                    {
                         return isReversedComparing ? (x, y) => comparer(y, x) : comparer;
+                    }
+
                     throw new NotSupportedException(string.Format("Custom sort by {0} property is not supported.", propertyDescriptor.Name));
                 }
 

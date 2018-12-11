@@ -9,7 +9,7 @@ using NUnit.Framework;
 namespace GitUITests.Editor.Diff
 {
     [TestFixture]
-    class LinePrefixHelperFixture
+    internal class LinePrefixHelperFixture
     {
         [Test]
         public void CanFindAddedLines()
@@ -19,7 +19,7 @@ namespace GitUITests.Editor.Diff
 -removed line
 -removed line";
 
-            var lineSegmentGetter = PrepareliLineSegmentGetter(diffText);
+            var lineSegmentGetter = PrepareLineSegmentGetter(diffText);
 
             var doc = PreDocumentForDiffText(diffText);
 
@@ -42,7 +42,7 @@ namespace GitUITests.Editor.Diff
 -removed line1
 -removed line2";
 
-            var lineSegmentGetter = PrepareliLineSegmentGetter(diffText);
+            var lineSegmentGetter = PrepareLineSegmentGetter(diffText);
 
             var doc = PreDocumentForDiffText(diffText);
 
@@ -69,7 +69,7 @@ namespace GitUITests.Editor.Diff
         [TestCase("- diffline", "-")]
         public void CanCheckIfTheLineStartsWithSpecificPrefix(string diffText, string prefix)
         {
-            var lineSegmentGetter = PrepareliLineSegmentGetter(diffText);
+            var lineSegmentGetter = PrepareLineSegmentGetter(diffText);
 
             var doc = PreDocumentForDiffText(diffText);
 
@@ -79,9 +79,9 @@ namespace GitUITests.Editor.Diff
 
         [TestCase("+")]
         [TestCase("-")]
-        public void GivenThatTheDocDoesnotHaveEnoughChars_ShouldReturnFalseWhenCheckPrefix(string diffText)
+        public void GivenThatTheDocDoesNotHaveEnoughChars_ShouldReturnFalseWhenCheckPrefix(string diffText)
         {
-            var lineSegmentGetter = PrepareliLineSegmentGetter(diffText);
+            var lineSegmentGetter = PrepareLineSegmentGetter(diffText);
 
             var doc = PreDocumentForDiffText(diffText);
 
@@ -92,18 +92,18 @@ namespace GitUITests.Editor.Diff
         private static IDocument PreDocumentForDiffText(string diffText)
         {
             var doc = Substitute.For<IDocument>();
-            doc.GetCharAt(Arg.Any<int>()).Returns(args => diffText[(int) args[0]]);
-            doc.TotalNumberOfLines.Returns(diffText.Split('\n').Count());
+            doc.GetCharAt(Arg.Any<int>()).Returns(args => diffText[(int)args[0]]);
+            doc.TotalNumberOfLines.Returns(diffText.Split('\n').Length);
             doc.TextLength.Returns(diffText.Length);
             return doc;
         }
 
-        private static LineSegmentGetter PrepareliLineSegmentGetter(string diffText)
+        private static LineSegmentGetter PrepareLineSegmentGetter(string diffText)
         {
             var lineSegments = GetSegmentsForDiffText(diffText);
             var lineSegmentGetter = Substitute.For<LineSegmentGetter>();
             lineSegmentGetter.GetSegment(Arg.Any<IDocument>(), Arg.Any<int>())
-                .Returns(args => lineSegments[(int) args[1]]);
+                .Returns(args => lineSegments[(int)args[1]]);
             return lineSegmentGetter;
         }
 
@@ -123,8 +123,10 @@ namespace GitUITests.Editor.Diff
                     var lastSeg = lineSegments.Last();
                     seg.Offset = lastSeg.Offset + lastSeg.Length + 1;
                 }
+
                 lineSegments.Add(seg);
             }
+
             return lineSegments;
         }
     }

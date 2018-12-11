@@ -2,22 +2,13 @@
 {
     public interface IGitCommand
     {
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns>if command accesses remote repository</returns>
-        bool AccessesRemote();
+        /// <value>if command accesses remote repository</value>
+        bool AccessesRemote { get; }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns>true if repo state changes after executing this command</returns>
-        bool ChangesRepoState();
+        /// <value>true if repo state changes after executing this command</value>
+        bool ChangesRepoState { get; }
 
-        /// <summary>
-        /// 
-        /// </summary>
         /// <returns>git command arguments as single line</returns>
-        string ToLine();
+        string Arguments { get; }
     }
 }

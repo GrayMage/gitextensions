@@ -1,13 +1,11 @@
 ﻿using System;
-using System.Text;
-using System.Windows.Forms;
-
-using ConEmu.WinForms;
-
-using GitCommands;
-using GitCommands.Utils;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
+using ConEmu.WinForms;
+using GitCommands;
+using GitCommands.Logging;
+using GitCommands.Utils;
 
 namespace GitUI.UserControls
 {
@@ -28,38 +26,18 @@ namespace GitUI.UserControls
 
         private void InitializeComponent()
         {
-            Controls.Add(_panel = new Panel() { Dock = DockStyle.Fill, BorderStyle = BorderStyle.Fixed3D });
+            Controls.Add(_panel = new Panel { Dock = DockStyle.Fill, BorderStyle = BorderStyle.Fixed3D });
         }
 
-        public override int ExitCode
-        {
-            get
-            {
-                return _nLastExitCode;
-            }
-        }
+        public override int ExitCode => _nLastExitCode;
 
-        public override bool IsDisplayingFullProcessOutput
-        {
-            get
-            {
-                return true;
-            }
-        }
+        public override bool IsDisplayingFullProcessOutput => true;
 
-        public static bool IsSupportedInThisEnvironment
-        {
-            get
-            {
-                return EnvUtils.RunningOnWindows(); // ConEmu only works in WinNT
-            }
-        }
+        public static bool IsSupportedInThisEnvironment => EnvUtils.RunningOnWindows();
 
         public override void AppendMessageFreeThreaded(string text)
         {
-            ConEmuSession session = _terminal.RunningSession;
-            if(session != null)
-                session.WriteOutputText(text);
+            _terminal.RunningSession?.WriteOutputTextAsync(text);
         }
 
         public override void KillProcess()
@@ -69,19 +47,16 @@ namespace GitUI.UserControls
 
         private static void KillProcess(ConEmuControl terminal)
         {
-            ConEmuSession session = terminal.RunningSession;
-            if (session != null)
-                session.SendControlCAsync();
+            terminal.RunningSession?.SendControlCAsync();
         }
 
         public override void Reset()
         {
             ConEmuControl oldTerminal = _terminal;
 
-            _terminal = new ConEmuControl()
+            _terminal = new ConEmuControl
             {
                 Dock = DockStyle.Fill,
-                AutoStartInfo = null, /* don't spawn terminal until we have gotten the command */
                 IsStatusbarVisible = false
             };
 
@@ -97,70 +72,71 @@ namespace GitUI.UserControls
 
         protected override void Dispose(bool disposing)
         {
-            base.Dispose(disposing);
-            if (disposing && _terminal != null)
+            if (disposing)
             {
-                _terminal.Dispose();
+                _terminal?.Dispose();
             }
+
+            base.Dispose(disposing);
         }
 
-        public override void StartProcess(string command, string arguments, string workdir, Dictionary<string, string> envVariables)
+        public override void StartProcess(string command, string arguments, string workDir, Dictionary<string, string> envVariables)
         {
-            var cmdl = new StringBuilder();
-            if (command != null)
-            {
-                cmdl.Append(command.Quote() /* do the escaping for it */);
-                cmdl.Append(" ");
-            }
-            cmdl.Append(arguments /* expecting to be already escaped */);
+            var commandLine = new ArgumentBuilder { command.Quote(), arguments }.ToString();
+            var outputProcessor = new ConsoleCommandLineOutputProcessor(commandLine.Length, FireDataReceived);
 
-            var startinfo = new ConEmuStartInfo();
-            startinfo.ConsoleProcessCommandLine = cmdl.ToString();
+            var startInfo = new ConEmuStartInfo
+            {
+                ConsoleProcessCommandLine = commandLine,
+                IsEchoingConsoleCommandLine = true,
+                WhenConsoleProcessExits = WhenConsoleProcessExits.KeepConsoleEmulatorAndShowMessage,
+                AnsiStreamChunkReceivedEventSink = outputProcessor.AnsiStreamChunkReceived,
+                StartupDirectory = workDir
+            };
+
             if (AppSettings.ConEmuStyle.ValueOrDefault != "Default")
             {
-                startinfo.ConsoleProcessExtraArgs = " -new_console:P:\"" + AppSettings.ConEmuStyle.ValueOrDefault + "\"";
+                startInfo.ConsoleProcessExtraArgs = " -new_console:P:\"" + AppSettings.ConEmuStyle.ValueOrDefault + "\"";
             }
-            startinfo.StartupDirectory = workdir;
-            foreach (var envVariable in envVariables)
-            {
-                startinfo.SetEnv(envVariable.Key, envVariable.Value);
-            }
-            startinfo.WhenConsoleProcessExits = WhenConsoleProcessExits.KeepConsoleEmulatorAndShowMessage;
-            var outputProcessor = new ConsoleCommandLineOutputProcessor(startinfo.ConsoleProcessCommandLine.Length, FireDataReceived);
-            startinfo.AnsiStreamChunkReceivedEventSink = outputProcessor.AnsiStreamChunkReceived;
 
-            startinfo.ConsoleProcessExitedEventSink = (sender, args) =>
+            foreach (var (name, value) in envVariables)
             {
-                outputProcessor.Flush();
+                startInfo.SetEnv(name, value);
+            }
+
+            var operation = CommandLog.LogProcessStart(command, arguments, workDir);
+
+            startInfo.ConsoleProcessExitedEventSink = (_, args) =>
+            {
                 _nLastExitCode = args.ExitCode;
+                operation.LogProcessEnd(_nLastExitCode);
+                outputProcessor.Flush();
                 FireProcessExited();
             };
 
-            startinfo.ConsoleEmulatorClosedEventSink = (s, e) =>
+            startInfo.ConsoleEmulatorClosedEventSink = (sender, _) =>
+            {
+                if (sender == _terminal.RunningSession)
                 {
-                    if (s == _terminal.RunningSession)
-                    {
-                        FireTerminated();
-                    }
-                };
-            startinfo.IsEchoingConsoleCommandLine = true;
+                    FireTerminated();
+                }
+            };
 
-            _terminal.Start(startinfo);
+            _terminal.Start(startInfo, ThreadHelper.JoinableTaskFactory);
         }
     }
 
-    [CLSCompliant(false)]
     public class ConsoleCommandLineOutputProcessor
     {
-        private Action<TextEventArgs> _FireDataReceived;
+        private readonly Action<TextEventArgs> _fireDataReceived;
         private int _commandLineCharsInOutput;
-        private string _lineChunk = null;
+        private string _lineChunk;
 
-        public ConsoleCommandLineOutputProcessor(int commandLineCharsInOutput, Action<TextEventArgs> FireDataReceived)
+        public ConsoleCommandLineOutputProcessor(int commandLineCharsInOutput, Action<TextEventArgs> fireDataReceived)
         {
-            _FireDataReceived = FireDataReceived;
+            _fireDataReceived = fireDataReceived;
             _commandLineCharsInOutput = commandLineCharsInOutput;
-            _commandLineCharsInOutput += Environment.NewLine.Length;//for \n after the command line
+            _commandLineCharsInOutput += Environment.NewLine.Length; // for \n after the command line
         }
 
         private string FilterOutConsoleCommandLine(string outputChunk)
@@ -172,6 +148,7 @@ namespace GitUI.UserControls
                     _commandLineCharsInOutput -= outputChunk.Length;
                     return null;
                 }
+
                 string rest = outputChunk.Substring(_commandLineCharsInOutput);
                 _commandLineCharsInOutput = 0;
                 return rest;
@@ -197,12 +174,14 @@ namespace GitUI.UserControls
                 output = _lineChunk + output;
                 _lineChunk = null;
             }
+
             string[] outputLines = Regex.Split(output, @"(?<=[\n\r])");
             int lineCount = outputLines.Length;
             if (outputLines[lineCount - 1].IsNullOrEmpty())
             {
                 lineCount--;
             }
+
             for (int i = 0; i < lineCount; i++)
             {
                 string outputLine = outputLines[i];
@@ -218,7 +197,8 @@ namespace GitUI.UserControls
                         break;
                     }
                 }
-                _FireDataReceived(new TextEventArgs(outputLine));
+
+                _fireDataReceived(new TextEventArgs(outputLine));
             }
         }
 
@@ -226,7 +206,7 @@ namespace GitUI.UserControls
         {
             if (_lineChunk != null)
             {
-                _FireDataReceived(new TextEventArgs(_lineChunk));
+                _fireDataReceived(new TextEventArgs(_lineChunk));
                 _lineChunk = null;
             }
         }

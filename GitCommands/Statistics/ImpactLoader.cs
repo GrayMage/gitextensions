@@ -1,22 +1,52 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using GitUI;
 using GitUIPluginInterfaces;
+using Microsoft.VisualStudio.Threading;
 
 namespace GitCommands.Statistics
 {
     public sealed class ImpactLoader : IDisposable
     {
-        public class CommitEventArgs : EventArgs
+        public readonly struct Commit
         {
-            public CommitEventArgs(Commit commit)
+            public DateTime Week { get; }
+            public string Author { get; }
+            public DataPoint Data { get; }
+
+            public Commit(DateTime week, string author, DataPoint data)
             {
-                Commit = commit;
+                Week = week;
+                Author = author;
+                Data = data;
+            }
+        }
+
+        public readonly struct DataPoint
+        {
+            public int Commits { get; }
+            public int AddedLines { get; }
+            public int DeletedLines { get; }
+
+            public int ChangedLines => AddedLines + DeletedLines;
+
+            public DataPoint(int commits, int added, int deleted)
+            {
+                Commits = commits;
+                AddedLines = added;
+                DeletedLines = deleted;
             }
 
-            public Commit Commit { get; private set; }
+            public static DataPoint operator +(DataPoint left, DataPoint right)
+            {
+                return new DataPoint(
+                    left.Commits + right.Commits,
+                    left.AddedLines + right.AddedLines,
+                    left.DeletedLines + right.DeletedLines);
+            }
         }
 
         /// <summary>
@@ -25,210 +55,212 @@ namespace GitCommands.Statistics
         public bool RespectMailmap { get; set; }
 
         public event EventHandler Exited;
-        public event EventHandler<CommitEventArgs> Updated;
+        public event Action<Commit> CommitLoaded;
 
-        public struct DataPoint
+        private readonly CancellationTokenSequence _cancellationTokenSequence = new CancellationTokenSequence();
+        private readonly IGitModule _module;
+
+        public ImpactLoader(IGitModule module)
         {
-            public int Commits, AddedLines, DeletedLines;
-
-            public int ChangedLines
-            {
-                get { return AddedLines + DeletedLines; }
-            }
-
-            public DataPoint(int commits, int added, int deleted)
-            {
-                this.Commits = commits;
-                this.AddedLines = added;
-                this.DeletedLines = deleted;
-            }
-
-            public static DataPoint operator +(DataPoint d1, DataPoint d2)
-            {
-                DataPoint temp = new DataPoint();
-                temp.Commits = d1.Commits + d2.Commits;
-                temp.AddedLines = d1.AddedLines + d2.AddedLines;
-                temp.DeletedLines = d1.DeletedLines + d2.DeletedLines;
-                return temp;
-            }
-        }
-
-        public struct Commit
-        {
-            public DateTime week;
-            public string author;
-            public DataPoint data;
-        }
-
-        private CancellationTokenSource _backgroundLoaderTokenSource = new CancellationTokenSource();
-        private readonly IGitModule Module;
-
-        public ImpactLoader(IGitModule aModule)
-        {
-            Module = aModule;
+            _module = module;
         }
 
         public void Dispose()
         {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        private void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                Stop();
-                _backgroundLoaderTokenSource.Dispose();
-            }
+            Stop();
+            _cancellationTokenSequence.Dispose();
         }
 
         public void Stop()
         {
-            _backgroundLoaderTokenSource.Cancel();
+            _cancellationTokenSequence.CancelCurrent();
         }
 
         public void Execute()
         {
-            _backgroundLoaderTokenSource.Cancel();
-            _backgroundLoaderTokenSource = new CancellationTokenSource();
-            var token = _backgroundLoaderTokenSource.Token;
-            Task[] tasks = GetTasks(token);
-            Task.Factory.ContinueWhenAll(tasks, (task) =>
+            var token = _cancellationTokenSequence.Next();
+
+            var tasks = GetTasks(token);
+
+            ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            {
+                try
                 {
-                    if (!token.IsCancellationRequested && Exited != null)
-                        Exited(this, EventArgs.Empty);
-                },
-                CancellationToken.None,
-                TaskContinuationOptions.None,
-                TaskScheduler.FromCurrentSynchronizationContext());
+                    await Task.WhenAll(tasks.Select(joinableTask => joinableTask.Task));
+                }
+                finally
+                {
+                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(token);
+                    if (!token.IsCancellationRequested)
+                    {
+                        Exited?.Invoke(this, EventArgs.Empty);
+                    }
+                }
+            });
         }
 
-        private bool showSubmodules;
+        private bool _showSubmodules;
         public bool ShowSubmodules
         {
-            get { return showSubmodules; }
-            set { Stop(); showSubmodules = value; }
+            get => _showSubmodules;
+            set
+            {
+                Stop();
+                _showSubmodules = value;
+            }
         }
 
-        private Task[] GetTasks(CancellationToken token)
+        private IReadOnlyList<JoinableTask> GetTasks(CancellationToken token)
         {
-            List<Task> tasks = new List<Task>();
-            string authorName = RespectMailmap ? "%aN" : "%an";
+            var authorName = RespectMailmap ? "%aN" : "%an";
+            var command = $"log --pretty=tformat:\"--- %ad --- {authorName}\" --numstat --date=iso -C --all --no-merges";
 
-            string command = "log --pretty=tformat:\"--- %ad --- " + authorName + "\" --numstat --date=iso -C --all --no-merges";
-
-            tasks.Add(Task.Factory.StartNew(() => LoadModuleInfo(command, Module, token), token));
+            var tasks = new List<JoinableTask>
+            {
+                ThreadHelper.JoinableTaskFactory.RunAsync(
+                    async () =>
+                    {
+                        await TaskScheduler.Default.SwitchTo(alwaysYield: true);
+                        LoadModuleInfo(command, _module, token);
+                    })
+            };
 
             if (ShowSubmodules)
             {
-                IList<string> submodules = Module.GetSubmodulesLocalPaths();
-                foreach (var submoduleName in submodules)
-                {
-                    IGitModule submodule = Module.GetSubmodule(submoduleName);
-                    if (submodule.IsValidGitWorkingDir())
-                        tasks.Add(Task.Factory.StartNew(() => LoadModuleInfo(command, submodule, token), token));
-                }
+                tasks.AddRange(
+                    from submoduleName in _module.GetSubmodulesLocalPaths()
+                    select _module.GetSubmodule(submoduleName)
+                    into submodule
+                    where submodule.IsValidGitWorkingDir()
+                    select ThreadHelper.JoinableTaskFactory.RunAsync(
+                        async () =>
+                        {
+                            await TaskScheduler.Default.SwitchTo(alwaysYield: true);
+                            LoadModuleInfo(command, submodule, token);
+                        }));
             }
-            return tasks.ToArray();
+
+            return tasks;
         }
 
         private void LoadModuleInfo(string command, IGitModule module, CancellationToken token)
         {
-            Process p = module.RunGitCmdDetached(command);
-
-            // Read line
-            string line = p.StandardOutput.ReadLine();
-
-            // Analyze commit listing
-            while (!token.IsCancellationRequested)
+            using (var lineEnumerator = module.GetGitOutputLines(command).GetEnumerator())
             {
-                Commit commit = new Commit();
-
-                // Reached the end ?
-                if (line == null)
-                    break;
-
-                // Look for commit delimiters
-                if (!line.StartsWith("--- "))
+                // Analyze commit listing
+                while (!token.IsCancellationRequested && lineEnumerator.MoveNext())
                 {
-                    line = p.StandardOutput.ReadLine();
-                    continue;
-                }
+                    // Read line
+                    var line = lineEnumerator.Current;
 
-                // Strip "--- " 
-                line = line.Substring(4);
-
-                // Split date and author
-                string[] header = line.Split(new[] { " --- " }, 2, StringSplitOptions.RemoveEmptyEntries);
-                if (header.Length != 2)
-                    continue;
-
-                // Save author in variable
-                commit.author = header[1];
-
-                // Parse commit date
-                DateTime date = DateTime.Parse(header[0]).Date;
-                // Calculate first day of the commit week
-                date = commit.week = date.AddDays(-(int)date.DayOfWeek);
-
-                // Reset commit data
-                commit.data.Commits = 1;
-                commit.data.AddedLines = 0;
-                commit.data.DeletedLines = 0;
-
-                // Parse commit lines
-                while ((line = p.StandardOutput.ReadLine()) != null && !line.StartsWith("--- ") && !token.IsCancellationRequested)
-                {
-                    // Skip empty line
-                    if (string.IsNullOrEmpty(line))
-                        continue;
-
-                    string[] fileLine = line.Split('\t');
-                    if (fileLine.Length >= 2)
+                    // Reached the end ?
+                    if (line == null)
                     {
-                        if (fileLine[0] != "-")
-                            commit.data.AddedLines += int.Parse(fileLine[0]);
-                        if (fileLine[1] != "-")
-                            commit.data.DeletedLines += int.Parse(fileLine[1]);
+                        break;
+                    }
+
+                    // Look for commit delimiters
+                    if (!line.StartsWith("--- "))
+                    {
+                        continue;
+                    }
+
+                    // Strip "--- "
+                    line = line.Substring(4);
+
+                    // Split date and author
+                    string[] header = line.Split(new[] { " --- " }, 2, StringSplitOptions.RemoveEmptyEntries);
+
+                    if (header.Length != 2)
+                    {
+                        continue;
+                    }
+
+                    // Save author in variable
+                    var author = header[1];
+
+                    // Parse commit date
+                    var date = DateTime.Parse(header[0]).Date;
+
+                    // Calculate first day of the commit week
+                    var week = date.AddDays(-(int)date.DayOfWeek);
+
+                    // Reset commit data
+                    var commits = 1;
+                    var added = 0;
+                    var deleted = 0;
+
+                    // Parse commit lines
+                    while (lineEnumerator.MoveNext() && (line = lineEnumerator.Current) != null && !line.StartsWith("--- ") && !token.IsCancellationRequested)
+                    {
+                        // Skip empty line
+                        if (string.IsNullOrEmpty(line))
+                        {
+                            continue;
+                        }
+
+                        string[] fileLine = line.Split('\t');
+                        if (fileLine.Length >= 2)
+                        {
+                            if (fileLine[0] != "-")
+                            {
+                                added += int.Parse(fileLine[0]);
+                            }
+
+                            if (fileLine[1] != "-")
+                            {
+                                deleted += int.Parse(fileLine[1]);
+                            }
+                        }
+                    }
+
+                    if (!token.IsCancellationRequested)
+                    {
+                        CommitLoaded?.Invoke(new Commit(week, author, new DataPoint(commits, added, deleted)));
                     }
                 }
-
-                if (Updated != null && !token.IsCancellationRequested)
-                    Updated(this, new CommitEventArgs(commit));
             }
         }
 
         public static void AddIntermediateEmptyWeeks(
-            ref SortedDictionary<DateTime, Dictionary<string, DataPoint>> impact, Dictionary<string, DataPoint> authors)
+            ref SortedDictionary<DateTime, Dictionary<string, DataPoint>> impact,
+            IEnumerable<string> authors)
         {
-            foreach (var authorData in authors)
+            foreach (var author in authors)
             {
-                string author = authorData.Key;
-
                 // Determine first and last commit week of each author
-                DateTime start = new DateTime(), end = new DateTime();
-                bool startFound = false;
-                foreach (var week in impact)
+                var start = new DateTime();
+                var end = new DateTime();
+                var startFound = false;
+
+                foreach (var (weekDate, weekDataByAuthor) in impact)
                 {
-                    if (week.Value.ContainsKey(author))
+                    if (weekDataByAuthor.ContainsKey(author))
                     {
                         if (!startFound)
                         {
-                            start = week.Key;
+                            start = weekDate;
                             startFound = true;
                         }
-                        end = week.Key;
+
+                        end = weekDate;
                     }
                 }
+
                 if (!startFound)
+                {
                     continue;
+                }
 
                 // Add 0 commits weeks in between
-                foreach (var week in impact)
-                    if (!week.Value.ContainsKey(author) &&
-                        week.Key > start && week.Key < end)
-                        week.Value.Add(author, new DataPoint(0, 0, 0));
+                foreach (var (weekDate, weekDataByAuthor) in impact)
+                {
+                    if (!weekDataByAuthor.ContainsKey(author) &&
+                        weekDate > start && weekDate < end)
+                    {
+                        weekDataByAuthor.Add(author, new DataPoint(0, 0, 0));
+                    }
+                }
             }
         }
     }

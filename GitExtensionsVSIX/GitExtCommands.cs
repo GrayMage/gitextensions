@@ -1,16 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
-
+using System.Diagnostics;
+using System.Threading;
 using EnvDTE;
-using EnvDTE80;
-
-using GitPluginShared;
-using GitPluginShared.Commands;
-
+using GitExtensionsVSIX.Commands;
 using Microsoft.VisualStudio.Shell;
 using static GitExtensionsVSIX.PackageIds;
-using GitExtensionsVSIX.Commands;
+using Task = System.Threading.Tasks.Task;
 
 namespace GitExtensionsVSIX
 {
@@ -29,28 +26,24 @@ namespace GitExtensionsVSIX
         /// </summary>
         private readonly Package _package;
 
-        private readonly Dictionary<string, VsixCommandBase> _commandsByName = new Dictionary<string, VsixCommandBase>();
         private readonly Dictionary<int, VsixCommandBase> _commands = new Dictionary<int, VsixCommandBase>();
 
-        private readonly DTE2 _application;
+        private readonly _DTE _application;
         private OutputWindowPane _outputPane;
-        private OleMenuCommandService _commandService;
+        private readonly IMenuCommandService _commandService;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GitExtCommands"/> class.
         /// Adds our command handlers for menu (commands must exist in the command table file)
         /// </summary>
         /// <param name="package">Owner package, not null.</param>
-        private GitExtCommands(Package package)
+        private GitExtCommands(Package package, _DTE dte, IMenuCommandService menuCommandService)
         {
-            if (package == null)
-            {
-                throw new ArgumentNullException("package");
-            }
+            ThreadHelper.ThrowIfNotOnUIThread();
 
-            _package = package;
-            _application = (DTE2)ServiceProvider.GetService(typeof(DTE));
-            _commandService = ServiceProvider.GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
+            _package = package ?? throw new ArgumentNullException(nameof(package));
+            _application = dte;
+            _commandService = menuCommandService;
 
             try
             {
@@ -59,66 +52,59 @@ namespace GitExtensionsVSIX
             }
             catch (Exception ex)
             {
-                if (OutputPane != null)
-                    OutputPane.OutputString("Error adding commands: " + ex);
+                OutputPane?.OutputString("Error adding commands: " + ex);
             }
         }
 
         private void RegisterCommands()
         {
-            //RegisterCommand("Difftool_Selection", new ToolbarCommand<OpenWithDiftool>(runForSelection: true));
-            RegisterCommand("Difftool", new ToolbarCommand<OpenWithDiftool>(), gitExtDiffCommand);
-            //RegisterCommand("ShowFileHistory_Selection", new ToolbarCommand<FileHistory>(runForSelection: true));
-            RegisterCommand("ShowFileHistory", new ToolbarCommand<FileHistory>(), gitExtHistoryCommand);
-            //RegisterCommand("ResetChanges_Selection", new ToolbarCommand<Revert>(runForSelection: true));
-            RegisterCommand("ResetChanges", new ToolbarCommand<Revert>(), gitExtResetFileCommand);
-            RegisterCommand("Browse", new ToolbarCommand<Browse>(), gitExtBrowseCommand);
-            RegisterCommand("Clone", new ToolbarCommand<Clone>(), gitExtCloneCommand);
-            RegisterCommand("CreateNewRepository", new ToolbarCommand<Init>(), gitExtNewCommand);
-            RegisterCommand("Commit", new Commit(), gitExtCommitCommand);
-            RegisterCommand("Pull", new ToolbarCommand<Pull>(), gitExtPullCommand);
-            RegisterCommand("Push", new ToolbarCommand<Push>(), gitExtPushCommand);
-            RegisterCommand("Stash", new ToolbarCommand<Stash>(), gitExtStashCommand);
-            RegisterCommand("Remotes", new ToolbarCommand<Remotes>(), gitExtRemotesCommand);
-            RegisterCommand("GitIgnore", new ToolbarCommand<GitIgnore>(), gitExtGitIgnoreCommand);
-            RegisterCommand("ApplyPatch", new ToolbarCommand<ApplyPatch>(), gitExtApplyPatchCommand);
-            RegisterCommand("FormatPatch", new ToolbarCommand<FormatPatch>(), gitExtFormatPatchCommand);
-            RegisterCommand("ViewChanges", new ToolbarCommand<ViewChanges>(), gitExtViewChangesCommand);
-            RegisterCommand("Blame", new ToolbarCommand<Blame>(), gitExtBlameCommand);
-            RegisterCommand("FindFile", new ToolbarCommand<FindFile>(), gitExtFindFileCommand);
-            RegisterCommand("SwitchBranch", new ToolbarCommand<SwitchBranch>(), gitExtCheckoutCommand);
-            RegisterCommand("CreateBranch", new ToolbarCommand<CreateBranch>(), gitExtCreateBranchCommand);
-            RegisterCommand("Merge", new ToolbarCommand<Merge>(), gitExtMergeCommand);
-            RegisterCommand("Rebase", new ToolbarCommand<Rebase>(), gitExtRebaseCommand);
-            RegisterCommand("SolveMergeConflicts", new ToolbarCommand<SolveMergeConflicts>(), gitExtSolveConflictsCommand);
-            RegisterCommand("CherryPick", new ToolbarCommand<Cherry>(), gitExtCherryPickCommand);
-            RegisterCommand("Bash", new ToolbarCommand<Bash>(), gitExtBashCommand);
-            RegisterCommand("Settings", new ToolbarCommand<Settings>(), gitExtSettingsCommand);
-            RegisterCommand("About", new ToolbarCommand<About>(), gitExtAboutCommand);
+            ////RegisterCommand(new ToolbarCommand<OpenWithDifftool>(runForSelection: true));
+            RegisterCommand(new ToolbarCommand<OpenWithDifftool>(), gitExtDiffCommand);
+            ////RegisterCommand(new ToolbarCommand<FileHistory>(runForSelection: true));
+            RegisterCommand(new ToolbarCommand<FileHistory>(), gitExtHistoryCommand);
+            ////RegisterCommand(new ToolbarCommand<Revert>(runForSelection: true));
+            RegisterCommand(new ToolbarCommand<Revert>(), gitExtResetFileCommand);
+            RegisterCommand(new ToolbarCommand<Browse>(), gitExtBrowseCommand);
+            RegisterCommand(new ToolbarCommand<Clone>(), gitExtCloneCommand);
+            RegisterCommand(new ToolbarCommand<Init>(), gitExtNewCommand);
+            RegisterCommand(new Commit(), gitExtCommitCommand);
+            RegisterCommand(new ToolbarCommand<Pull>(), gitExtPullCommand);
+            RegisterCommand(new ToolbarCommand<Push>(), gitExtPushCommand);
+            RegisterCommand(new ToolbarCommand<Stash>(), gitExtStashCommand);
+            RegisterCommand(new ToolbarCommand<Remotes>(), gitExtRemotesCommand);
+            RegisterCommand(new ToolbarCommand<GitIgnore>(), gitExtGitIgnoreCommand);
+            RegisterCommand(new ToolbarCommand<ApplyPatch>(), gitExtApplyPatchCommand);
+            RegisterCommand(new ToolbarCommand<FormatPatch>(), gitExtFormatPatchCommand);
+            RegisterCommand(new ToolbarCommand<ViewChanges>(), gitExtViewChangesCommand);
+            RegisterCommand(new ToolbarCommand<Blame>(), gitExtBlameCommand);
+            RegisterCommand(new ToolbarCommand<FindFile>(), gitExtFindFileCommand);
+            RegisterCommand(new ToolbarCommand<SwitchBranch>(), gitExtCheckoutCommand);
+            RegisterCommand(new ToolbarCommand<CreateBranch>(), gitExtCreateBranchCommand);
+            RegisterCommand(new ToolbarCommand<Merge>(), gitExtMergeCommand);
+            RegisterCommand(new ToolbarCommand<Rebase>(), gitExtRebaseCommand);
+            RegisterCommand(new ToolbarCommand<SolveMergeConflicts>(), gitExtSolveConflictsCommand);
+            RegisterCommand(new ToolbarCommand<Cherry>(), gitExtCherryPickCommand);
+            RegisterCommand(new ToolbarCommand<Bash>(), gitExtBashCommand);
+            RegisterCommand(new ToolbarCommand<Settings>(), gitExtSettingsCommand);
+            RegisterCommand(new ToolbarCommand<About>(), gitExtAboutCommand);
         }
 
-        private void RegisterCommand(string commandName, CommandBase command, int id)
+        private void RegisterCommand(CommandBase command, int id)
         {
-            RegisterCommand(commandName, new VsixCommandBase(command), id);
-        }
-
-        private void RegisterCommand(string commandName, VsixCommandBase command, int id)
-        {
-            _commandsByName[commandName] = command;
             var commandId = new CommandID(CommandSet, id);
             var menuCommand = new OleMenuCommand(MenuItemCallback, commandId);
             menuCommand.BeforeQueryStatus += MenuCommand_BeforeQueryStatus;
             _commandService.AddCommand(menuCommand);
-            _commands[id] = command;
+            _commands[id] = new VsixCommandBase(command);
         }
 
         private void MenuCommand_BeforeQueryStatus(object sender, EventArgs e)
         {
-            OleMenuCommand guiCommand = (OleMenuCommand)sender;
-            VsixCommandBase command;
-            if (!_commands.TryGetValue(guiCommand.CommandID.ID, out command))
-                return;
-            command.BeforeQueryStatus(_application, guiCommand);
+            var guiCommand = (OleMenuCommand)sender;
+            if (_commands.TryGetValue(guiCommand.CommandID.ID, out var command))
+            {
+                command.BeforeQueryStatus(_application, guiCommand);
+            }
         }
 
         /// <summary>
@@ -129,23 +115,25 @@ namespace GitExtensionsVSIX
         /// <summary>
         /// Gets the service provider from the owner package.
         /// </summary>
-        private IServiceProvider ServiceProvider
-        {
-            get { return _package; }
-        }
+        private IServiceProvider ServiceProvider => _package;
 
-        public OutputWindowPane OutputPane
-        {
-            get { return _outputPane ?? (_outputPane = PluginHelpers.AquireOutputPane(_application, Vsix.Name)); }
-        }
+        public OutputWindowPane OutputPane => _outputPane ?? (_outputPane = PluginHelpers.AcquireOutputPane(_application, Vsix.Name));
 
         /// <summary>
         /// Initializes the singleton instance of the command.
         /// </summary>
         /// <param name="package">Owner package, not null.</param>
-        public static void Initialize(Package package)
+        public static async Task InitializeAsync(AsyncPackage package, CancellationToken cancellationToken)
         {
-            Instance = new GitExtCommands(package);
+            var dteObject = await package.GetServiceAsync(typeof(DTE));
+            var menuCommandServiceObject = await package.GetServiceAsync(typeof(IMenuCommandService));
+
+            cancellationToken.ThrowIfCancellationRequested();
+            Debug.Assert(dteObject != null, $"Assertion failed: {nameof(dteObject)} != null");
+            Debug.Assert(menuCommandServiceObject != null, $"Assertion failed: {nameof(menuCommandServiceObject)} != null");
+
+            await package.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+            Instance = new GitExtCommands(package, (_DTE)dteObject, (IMenuCommandService)menuCommandServiceObject);
         }
 
         /// <summary>
@@ -158,10 +146,10 @@ namespace GitExtensionsVSIX
         private void MenuItemCallback(object sender, EventArgs e)
         {
             var guiCommand = (MenuCommand)sender;
-            VsixCommandBase command;
-            if (!_commands.TryGetValue(guiCommand.CommandID.ID, out command))
-                return;
-            command.BaseCommand.OnCommand(_application, OutputPane);
+            if (_commands.TryGetValue(guiCommand.CommandID.ID, out var command))
+            {
+                command.BaseCommand.OnCommand(_application, OutputPane);
+            }
         }
     }
 }

@@ -13,7 +13,7 @@ namespace GitCommandsTests.Git
     [TestFixture]
     public class GitDirectoryResolverTests
     {
-        private string _workingDir = @"c:\dev\repo";
+        private readonly string _workingDir = @"c:\dev\repo";
         private string _gitWorkingDir;
         private string _gitFile;
         private FileBase _file;
@@ -24,10 +24,6 @@ namespace GitCommandsTests.Git
         [SetUp]
         public void Setup()
         {
-            if (Type.GetType("Mono.Runtime") != null)
-            {
-                _workingDir = "/home/user/repo";
-            }
             _gitFile = Path.Combine(_workingDir, ".git");
             _gitWorkingDir = _gitFile.EnsureTrailingPathSeparator();
 
@@ -42,11 +38,10 @@ namespace GitCommandsTests.Git
             _resolver = new GitDirectoryResolver(_fileSystem);
         }
 
-
         [Test]
         public void Resolve_should_throw_if_path_is_null()
         {
-            ((Action)(() => _resolver.Resolve(null))).ShouldThrow<ArgumentNullException>();
+            ((Action)(() => _resolver.Resolve(null))).Should().Throw<ArgumentNullException>();
         }
 
         [TestCase("")]
@@ -87,19 +82,6 @@ namespace GitCommandsTests.Git
             _directory.DidNotReceive().Exists(_gitWorkingDir);
         }
 
-        [Platform(Exclude = "Win")]
-        [Test]
-        public void Resolve_should_return_path_from_git_file_if_present_Mono()
-        {
-            _file.Exists(_gitFile).Returns(true);
-            _file.ReadLines(_gitFile).Returns(new[] { "", " ", @"gitdir: /home/user/repo/.git/modules/Externals/Git.hub", "text" });
-
-            _resolver.Resolve(_workingDir).Should().Be(@"/home/user/repo/.git/modules/Externals/Git.hub/");
-
-            _directory.DidNotReceive().Exists(_gitWorkingDir);
-        }
-
-        [Platform(Include = "Win")]
         [Test]
         public void Resolve_should_return_resolved_full_path_from_git_file_if_present()
         {
@@ -111,20 +93,8 @@ namespace GitCommandsTests.Git
             _directory.DidNotReceive().Exists(_gitWorkingDir);
         }
 
-        [Platform(Exclude = "Win")]
         [Test]
-        public void Resolve_should_return_resolved_full_path_from_git_file_if_present_Mono()
-        {
-            _file.Exists(_gitFile).Returns(true);
-            _file.ReadLines(_gitFile).Returns(new[] { "", " ", @"gitdir: ../.git/modules/Externals/Git.hub", "text" });
-
-            _resolver.Resolve(_workingDir).Should().Be(@"/home/user/.git/modules/Externals/Git.hub/");
-
-            _directory.DidNotReceive().Exists(_gitWorkingDir);
-        }
-
-        [Test]
-        public void Resolve_non_bare_repository_real_filsystem()
+        public void Resolve_non_bare_repository_real_filesystem()
         {
             _resolver = new GitDirectoryResolver();
             using (var helper = new GitModuleTestHelper())
@@ -133,9 +103,8 @@ namespace GitCommandsTests.Git
             }
         }
 
-        [Platform(Include = "Win")]
         [Test]
-        public void Resolve_submodule_real_filsystem()
+        public void Resolve_submodule_real_filesystem()
         {
             using (var helper = new GitModuleTestHelper())
             {
@@ -145,20 +114,6 @@ namespace GitCommandsTests.Git
 
                 _resolver.Resolve(submodulePath).Should().Be($@"{helper.Module.WorkingDirGitDir}modules\Externals\Git.hub\");
                 _resolver.Resolve(helper.Module.WorkingDir).Should().Be(helper.Module.WorkingDirGitDir);
-            }
-        }
-
-        [Platform(Exclude = "Win")]
-        [Test]
-        public void Resolve_submodule_real_filsystem_Mono()
-        {
-            using (var helper = new GitModuleTestHelper())
-            {
-                var submodulePath = Path.Combine(helper.Module.WorkingDir, "External", "Git.hub");
-                helper.CreateFile(submodulePath, ".git", "\r \r\ngitdir: ../../.git/modules/Externals/Git.hub\r\ntext");
-                _resolver = new GitDirectoryResolver();
-
-                _resolver.Resolve(submodulePath).Should().Be($@"{helper.Module.WorkingDirGitDir}modules/Externals/Git.hub/");
             }
         }
     }

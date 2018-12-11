@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Windows.Forms;
 using GitCommands;
 
 namespace GitUI.CommandsDialogs.SettingsDialog.Pages
@@ -9,7 +10,10 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
         {
             InitializeComponent();
             Text = "Shell extension";
-            Translate();
+            InitializeComplete();
+
+            // when the dock is set in the deigner it causes wierd visual artifacts in scaled Windows environments
+            chlMenuEntries.Dock = DockStyle.Fill;
         }
 
         protected override void SettingsToPage()
@@ -18,6 +22,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
             {
                 chlMenuEntries.SetItemChecked(i, AppSettings.CascadeShellMenuItems[i] == '1');
             }
+
             cbAlwaysShowAllCommands.Checked = AppSettings.AlwaysShowAllCommands;
 
             UpdatePreview();
@@ -25,7 +30,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
 
         protected override void PageToSettings()
         {
-            String l_CascadeShellMenuItems = "";
+            string l_CascadeShellMenuItems = "";
 
             for (int i = 0; i < chlMenuEntries.Items.Count; i++)
             {
@@ -57,11 +62,11 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
             {
                 if (chlMenuEntries.GetItemChecked(i))
                 {
-                    cascaded += "       " + chlMenuEntries.Items[i].ToString() + "\r\n";
+                    cascaded += "       " + chlMenuEntries.Items[i] + "\r\n";
                 }
                 else
                 {
-                    topLevel += "GitExt " + chlMenuEntries.Items[i].ToString() + "\r\n";
+                    topLevel += "GitExt " + chlMenuEntries.Items[i] + "\r\n";
                 }
             }
 

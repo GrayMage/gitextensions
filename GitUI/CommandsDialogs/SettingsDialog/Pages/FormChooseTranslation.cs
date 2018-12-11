@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 using GitCommands;
+using GitExtUtils.GitUI;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs.SettingsDialog.Pages
@@ -13,77 +14,61 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
         public FormChooseTranslation()
         {
             InitializeComponent();
-            Translate();
+            label1.Font = FontUtil.MainInstructionFont;
+            label1.ForeColor = FontUtil.MainInstructionColor;
+            InitializeComplete();
         }
 
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
 
-            const int labelHeight = 20;
-            const int imageHeight = 75;
-            const int imageWidth = 150;
-            int x = -(imageWidth + 6);
-            int y = 0;
             var translations = new List<string>(Translator.GetAllTranslations());
             translations.Sort();
             translations.Insert(0, "English");
 
+            var imageList = new ImageList
+            {
+                ImageSize = DpiUtil.Scale(new Size(150, 75)),
+            };
+
             foreach (string translation in translations)
             {
-                x += imageWidth + 6;
-                if (x > imageWidth * 4)
+                var imagePath = Path.Combine(Translator.GetTranslationDir(), translation + ".gif");
+                if (File.Exists(imagePath))
                 {
-                    x = 0;
-                    y += imageHeight + 6 + labelHeight;
+                    var image = Image.FromFile(imagePath);
+                    imageList.Images.Add(translation, image);
                 }
-
-                var translationImage = new PictureBox
-                                           {
-                                               Top = y + 34,
-                                               Left = x + 15,
-                                               Height = imageHeight,
-                                               Width = imageWidth,
-                                               BackgroundImageLayout = ImageLayout.Stretch
-                                           };
-                if (File.Exists(Path.Combine(Translator.GetTranslationDir(), translation + ".gif")))
-                    translationImage.BackgroundImage = Image.FromFile(Path.Combine(Translator.GetTranslationDir(), translation + ".gif"));
-                else
-                    translationImage.BackColor = Color.Black;
-
-                translationImage.Cursor = Cursors.Hand;
-                translationImage.Tag = translation;
-                translationImage.Click += translationImage_Click;
-
-                Controls.Add(translationImage);
-
-                Label label = new Label();
-                label.Text = translation;
-                label.Tag = translation;
-                label.Left = translationImage.Left;
-                label.Width = translationImage.Width;
-                label.Top = translationImage.Bottom;
-                label.Height = labelHeight;
-                label.TextAlign = ContentAlignment.TopCenter;
-                label.Click += translationImage_Click;
-                Controls.Add(label);
             }
 
-            Height = 34 + y + imageHeight + labelHeight + SystemInformation.CaptionHeight + 37;
-            Width = (imageWidth + 6) * 4 + 24;
-            label2.Top = Height - SystemInformation.CaptionHeight - 25;
-        }
+            lvTranslations.LargeImageList = imageList;
 
-        void translationImage_Click(object sender, EventArgs e)
-        {
-            AppSettings.Translation = ((Control)sender).Tag.ToString();
-            Close();
+            foreach (string translation in translations)
+            {
+                if (imageList.Images.ContainsKey(translation))
+                {
+                    lvTranslations.Items.Add(new ListViewItem(translation, translation) { Tag = translation });
+                }
+                else
+                {
+                    lvTranslations.Items.Add(new ListViewItem(translation) { Tag = translation });
+                }
+            }
         }
 
         private void FormChooseTranslation_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (string.IsNullOrEmpty(AppSettings.Translation))
+            {
                 AppSettings.Translation = "English";
+            }
+        }
+
+        private void lvTranslations_ItemActivate(object sender, EventArgs e)
+        {
+            AppSettings.Translation = ((ListView)sender).SelectedItems[0].Tag.ToString();
+            Close();
         }
     }
 }

@@ -1,8 +1,6 @@
 using System;
 using System.IO;
-using System.Linq;
 using GitCommands;
-using GitUIPluginInterfaces;
 
 namespace CommonTestUtils
 {
@@ -11,7 +9,6 @@ namespace CommonTestUtils
         /// <summary>
         /// Creates a throw-away new repository in a temporary location.
         /// </summary>
-        /// <returns></returns>
         public GitModuleTestHelper(string repositoryName = "repo1")
         {
             TemporaryPath = GetTemporaryPath();
@@ -21,27 +18,45 @@ namespace CommonTestUtils
             {
                 throw new ArgumentException($"Repository '{path}' already exists", nameof(repositoryName));
             }
+
             Directory.CreateDirectory(path);
 
             var module = new GitModule(path);
-            module.Init(false, false);
+            module.Init(bare: false, shared: false);
             Module = module;
-        }
 
+            // Don't assume global user/email
+            Module.RunGitCmd(@"config user.name ""author""");
+            Module.RunGitCmd(@"config user.email ""<author@mail.com>""");
+
+            return;
+
+            string GetTemporaryPath()
+            {
+                var tempPath = Path.GetTempPath();
+
+                // workaround macOS symlinking its temp folder
+                if (tempPath.StartsWith("/var"))
+                {
+                    tempPath = "/private" + tempPath;
+                }
+
+                return Path.Combine(tempPath, Path.GetRandomFileName());
+            }
+        }
 
         /// <summary>
         /// Gets the module.
         /// </summary>
-        public IGitModule Module { get; }
+        public GitModule Module { get; }
 
         /// <summary>
         /// Gets the temporary path where test repositories will be created for integration tests.
         /// </summary>
         public string TemporaryPath { get; }
 
-
         /// <summary>
-        /// Creates a new file, writes the specified string to the file, and then closes the file. 
+        /// Creates a new file, writes the specified string to the file, and then closes the file.
         /// If the target file already exists, it is overwritten.
         /// </summary>
         /// <returns>The path to the newly created file.</returns>
@@ -60,8 +75,8 @@ namespace CommonTestUtils
         }
 
         /// <summary>
-        /// Creates a new file under the working folder to the specified directory, 
-        /// writes the specified string to the file and then closes the file. 
+        /// Creates a new file under the working folder to the specified directory,
+        /// writes the specified string to the file and then closes the file.
         /// If the target file already exists, it is overwritten.
         /// </summary>
         /// <returns>The path to the newly created file.</returns>
@@ -79,8 +94,8 @@ namespace CommonTestUtils
         }
 
         /// <summary>
-        /// Creates a new file to the root of the working folder, 
-        /// writes the specified string to the file and then closes the file. 
+        /// Creates a new file to the root of the working folder,
+        /// writes the specified string to the file and then closes the file.
         /// If the target file already exists, it is overwritten.
         /// </summary>
         /// <returns>The path to the newly created file.</returns>
@@ -97,11 +112,35 @@ namespace CommonTestUtils
                 // we want to delete, so we need to make sure the timers that will try to auto-save there
                 // are stopped before actually deleting, else the timers will throw on a background thread.
                 // Note that the intermittent failures mentioned below are likely related too.
-                ((GitModule)Module).EffectiveConfigFile?.SettingsCache?.Dispose();
-                ((GitModule)Module).EffectiveSettings?.SettingsCache?.Dispose();
+                Module.EffectiveConfigFile.SettingsCache.Dispose();
+                Module.EffectiveSettings.SettingsCache.Dispose();
+
                 // Directory.Delete seems to intermittently fail, so delete the files first before deleting folders
-                Directory.GetFiles(TemporaryPath, "*", SearchOption.AllDirectories).ForEach(File.Delete);
-                Directory.Delete(TemporaryPath, true);
+                foreach (var file in Directory.GetFiles(TemporaryPath, "*", SearchOption.AllDirectories))
+                {
+                    if (File.GetAttributes(file).HasFlag(FileAttributes.ReparsePoint))
+                    {
+                        continue;
+                    }
+
+                    File.SetAttributes(file, FileAttributes.Normal);
+                    File.Delete(file);
+                }
+
+                // Delete tends to fail on the first try, so give it a few tries as a best effort.
+                // By this point, all files have been deleted anyway, so this is mainly about removing
+                // empty directories.
+                for (int tries = 0; tries < 10; ++tries)
+                {
+                    try
+                    {
+                        Directory.Delete(TemporaryPath, true);
+                        break;
+                    }
+                    catch
+                    {
+                    }
+                }
             }
             catch
             {
@@ -109,27 +148,12 @@ namespace CommonTestUtils
             }
         }
 
-
         private void EnsureCreatedInTempFolder(string path)
         {
             if (!path.StartsWith(TemporaryPath))
             {
                 throw new ArgumentException("The given module does not belong to this helper.");
             }
-        }
-
-        private static string GetTemporaryPath()
-        {
-            var tempPath = Path.GetTempPath();
-
-            // workaround macOS symlinking its temp folder
-            if (tempPath.StartsWith("/var"))
-            {
-                tempPath = "/private" + tempPath;
-            }
-
-            string tempDirectory = Path.Combine(tempPath, Path.GetRandomFileName());
-            return tempDirectory;
         }
     }
 }

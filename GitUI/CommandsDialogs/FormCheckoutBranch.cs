@@ -1,20 +1,20 @@
-﻿﻿﻿using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using GitCommands;
 using GitCommands.Git;
-using GitCommands.Utils;
 using GitUI.Script;
 using GitUIPluginInterfaces;
+using Microsoft.VisualStudio.Threading;
 using PSTaskDialog;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs
 {
-
     public partial class FormCheckoutBranch : GitModuleForm
     {
         #region Translation
@@ -24,9 +24,9 @@ namespace GitUI.CommandsDialogs
             new TranslationString("“{0}” is not valid branch name.\nEnter valid branch name or select predefined value.");
         private readonly TranslationString _createBranch =
             new TranslationString("Create local branch with the name:");
-        private readonly TranslationString _applyShashedItemsAgainCaption =
+        private readonly TranslationString _applyStashedItemsAgainCaption =
             new TranslationString("Auto stash");
-        private readonly TranslationString _applyShashedItemsAgain =
+        private readonly TranslationString _applyStashedItemsAgain =
             new TranslationString("Apply stashed items to working directory again?");
 
         private readonly TranslationString _dontShowAgain =
@@ -35,12 +35,13 @@ namespace GitUI.CommandsDialogs
         private readonly TranslationString _resetNonFastForwardBranch =
             new TranslationString("You are going to reset the “{0}” branch to a new location\n" +
                 "discarding ALL the commited changes since the {1} revision.\n\nAre you sure?");
-        readonly TranslationString resetCaption = new TranslationString("Reset branch");
+        private readonly TranslationString _resetCaption = new TranslationString("Reset branch");
         #endregion
 
-        private readonly string[] _containRevisons;
+        private readonly IReadOnlyList<ObjectId> _containRevisions;
         private readonly bool _isLoading;
         private readonly string _rbResetBranchDefaultText;
+        private TranslationString _invalidBranchName = new TranslationString("An existing branch must be selected.");
         private bool? _isDirtyDir;
         private string _remoteName = "";
         private string _newLocalBranchName = "";
@@ -49,54 +50,57 @@ namespace GitUI.CommandsDialogs
         private readonly GitBranchNameOptions _gitBranchNameOptions = new GitBranchNameOptions(AppSettings.AutoNormaliseSymbol);
         private readonly Dictionary<Control, int> _controls = new Dictionary<Control, int>();
 
-        private IEnumerable<IGitRef> _localBranches;
-        private IEnumerable<IGitRef> _remoteBranches;
+        private IReadOnlyList<IGitRef> _localBranches;
+        private IReadOnlyList<IGitRef> _remoteBranches;
 
-
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
         private FormCheckoutBranch()
-            : this(null)
         {
+            InitializeComponent();
         }
 
-        internal FormCheckoutBranch(GitUICommands aCommands)
-            : base(aCommands)
+        internal FormCheckoutBranch(GitUICommands commands)
+            : base(commands)
         {
             _branchNameNormaliser = new GitBranchNameNormaliser();
             InitializeComponent();
-            Translate();
+            InitializeComplete();
             _rbResetBranchDefaultText = rbResetBranch.Text;
 
             ApplyLayout();
             Shown += FormCheckoutBranch_Shown;
+
+            return;
+
+            void FormCheckoutBranch_Shown(object sender, EventArgs e)
+            {
+                Shown -= FormCheckoutBranch_Shown;
+                RecalculateSizeConstraints();
+            }
         }
 
-        public FormCheckoutBranch(GitUICommands aCommands, string branch, bool remote)
-            : this(aCommands, branch, remote, null)
-        {
-        }
-
-        public FormCheckoutBranch(GitUICommands aCommands, string branch, bool remote, string[] containRevisons)
-            : this(aCommands)
+        public FormCheckoutBranch(GitUICommands commands, string branch, bool remote, IReadOnlyList<ObjectId> containRevisions = null)
+            : this(commands)
         {
             _isLoading = true;
 
             try
             {
-                _containRevisons = containRevisons;
+                _containRevisions = containRevisions;
 
                 LocalBranch.Checked = !remote;
                 Remotebranch.Checked = remote;
 
                 PopulateBranches();
 
-                //Set current branch after initialize, because initialize will reset it
+                // Set current branch after initialize, because initialize will reset it
                 if (!string.IsNullOrEmpty(branch))
                 {
                     Branches.Items.Add(branch);
                     Branches.SelectedItem = branch;
                 }
 
-                if (containRevisons != null)
+                if (containRevisions != null)
                 {
                     if (Branches.Items.Count == 0)
                     {
@@ -106,12 +110,16 @@ namespace GitUI.CommandsDialogs
                     }
                 }
 
-                //The dirty check is very expensive on large repositories. Without this setting
-                //the checkout branch dialog is too slow.
+                // The dirty check is very expensive on large repositories. Without this setting
+                // the checkout branch dialog is too slow.
                 if (AppSettings.CheckForUncommittedChangesInCheckoutBranch)
+                {
                     _isDirtyDir = Module.IsDirtyDir();
+                }
                 else
+                {
                     _isDirtyDir = null;
+                }
 
                 localChangesGB.Visible = HasUncommittedChanges;
                 ChangesMode = AppSettings.CheckoutBranchAction;
@@ -123,17 +131,25 @@ namespace GitUI.CommandsDialogs
             }
         }
 
-
         private LocalChangesAction ChangesMode
         {
             get
             {
                 if (rbReset.Checked)
+                {
                     return LocalChangesAction.Reset;
+                }
+
                 if (rbMerge.Checked)
+                {
                     return LocalChangesAction.Merge;
+                }
+
                 if (rbStash.Checked)
+                {
                     return LocalChangesAction.Stash;
+                }
+
                 return LocalChangesAction.DontChange;
             }
             set
@@ -147,16 +163,17 @@ namespace GitUI.CommandsDialogs
 
         private bool HasUncommittedChanges => _isDirtyDir ?? true;
 
-
         public DialogResult DoDefaultActionOrShow(IWin32Window owner)
         {
             bool localBranchSelected = !Branches.Text.IsNullOrWhiteSpace() && !Remotebranch.Checked;
             if (!AppSettings.AlwaysShowCheckoutBranchDlg && localBranchSelected &&
                 (!HasUncommittedChanges || AppSettings.UseDefaultCheckoutBranchAction))
+            {
                 return OkClick();
+            }
+
             return ShowDialog(owner);
         }
-
 
         private void ApplyLayout()
         {
@@ -168,42 +185,23 @@ namespace GitUI.CommandsDialogs
                 localChangesPanel
             };
 
-            if (EnvUtils.IsMonoRuntime())
-            {
-                var margin = flowLayoutPanel2.Controls[0].Margin;
-                flowLayoutPanel2.Height = flowLayoutPanel2.Controls.OfType<Control>().Max(c => c.Height) + margin.Top + margin.Bottom;
-                localChangesGB.Height = flowLayoutPanel2.Height * 2 + localChangesGB.Padding.Top + localChangesGB.Padding.Bottom;
-                localChangesPanel.Height = localChangesGB.Height + localChangesGB.Margin.Top + localChangesGB.Margin.Bottom;
+            Ok.Anchor = AnchorStyles.Right;
 
-                Ok.AutoSize = false;
-                var buttonWidth = TextRenderer.MeasureText(Ok.Text, AppSettings.Font).Width + 10;
+            flowLayoutPanel2.AutoSize = true;
+            flowLayoutPanel2.Dock = DockStyle.Fill;
+            localChangesGB.AutoSize = true;
+            localChangesGB.Height = (flowLayoutPanel2.Height * 2) + localChangesGB.Padding.Top + localChangesGB.Padding.Bottom;
+            localChangesPanel.ColumnStyles[1].Width = Ok.Width + 10;
+            var height = localChangesGB.Height + localChangesGB.Margin.Top + localChangesGB.Margin.Bottom;
+            localChangesPanel.RowStyles[0].Height = height;
+            localChangesPanel.Height = height;
 
-                localChangesPanel.ColumnStyles[1].Width = buttonWidth + Ok.Margin.Left + Ok.Margin.Right;
-                Ok.Width = buttonWidth;
-
-                localChangesGB.Width = localChangesPanel.Width - (int)localChangesPanel.ColumnStyles[1].Width;
-                flowLayoutPanel2.Width = localChangesGB.Width - 2 * localChangesGB.Padding.Left - 2 * localChangesGB.Padding.Right;
-            }
-            else
-            {
-                Ok.Anchor = AnchorStyles.Right;
-
-                flowLayoutPanel2.AutoSize = true;
-                flowLayoutPanel2.Dock = DockStyle.Fill;
-                localChangesGB.AutoSize = true;
-                localChangesGB.Height = flowLayoutPanel2.Height * 2 + localChangesGB.Padding.Top + localChangesGB.Padding.Bottom;
-                localChangesPanel.ColumnStyles[1].Width = Ok.Width + 10;
-                var height = localChangesGB.Height + localChangesGB.Margin.Top + localChangesGB.Margin.Bottom;
-                localChangesPanel.RowStyles[0].Height = height;
-                localChangesPanel.Height = height;
-
-                Width = tableLayoutPanel1.PreferredSize.Width + 40;
-            }
+            Width = tableLayoutPanel1.PreferredSize.Width + 40;
 
             for (var i = 0; i < controls1.Length; i++)
             {
                 var margin = controls1[i].Margin;
-                var height = controls1[i].Height + margin.Top + margin.Bottom;
+                height = controls1[i].Height + margin.Top + margin.Bottom;
                 _controls.Add(controls1[i], height);
 
                 tableLayoutPanel1.RowStyles[i].Height = height;
@@ -216,34 +214,56 @@ namespace GitUI.CommandsDialogs
 
         private void PopulateBranches()
         {
-            if (IsUICommandsInitialized)
+            Branches.Items.Clear();
+
+            IEnumerable<string> branchNames;
+
+            if (_containRevisions == null)
             {
-                Branches.Items.Clear();
+                var branches = LocalBranch.Checked ? GetLocalBranches() : GetRemoteBranches();
 
-                IEnumerable<string> branchNames;
+                branchNames = branches.Select(b => b.Name);
+            }
+            else
+            {
+                branchNames = GetContainsRevisionBranches();
+            }
 
-                if (_containRevisons == null)
+            Branches.Items.AddRange(branchNames.Where(name => name.IsNotNullOrWhitespace()).ToArray<object>());
+
+            if (_containRevisions != null && Branches.Items.Count == 1)
+            {
+                Branches.SelectedIndex = 0;
+            }
+            else
+            {
+                Branches.Text = null;
+            }
+
+            IReadOnlyList<string> GetContainsRevisionBranches()
+            {
+                var result = new HashSet<string>();
+                if (_containRevisions.Count > 0)
                 {
-                    if (LocalBranch.Checked)
-                    {
-                        branchNames = GetLocalBranches().Select(b => b.Name);                        
-                    }
-                    else
-                    {
-                        branchNames = GetRemoteBranches().Select(b => b.Name);
-                    }
+                    var branches = Module.GetAllBranchesWhichContainGivenCommit(_containRevisions[0], LocalBranch.Checked,
+                            !LocalBranch.Checked)
+                        .Where(a => !DetachedHeadParser.IsDetachedHead(a) &&
+                                    !a.EndsWith("/HEAD"));
+                    result.UnionWith(branches);
                 }
-                else
+
+                for (int index = 1; index < _containRevisions.Count; index++)
                 {
-                    branchNames = GetContainsRevisionBranches();
+                    var containRevision = _containRevisions[index];
+                    var branches =
+                        Module.GetAllBranchesWhichContainGivenCommit(containRevision, LocalBranch.Checked,
+                                !LocalBranch.Checked)
+                            .Where(a => !DetachedHeadParser.IsDetachedHead(a) &&
+                                        !a.EndsWith("/HEAD"));
+                    result.IntersectWith(branches);
                 }
 
-                Branches.Items.AddRange(branchNames.Where(name => name.IsNotNullOrWhitespace()).ToArray());
-
-                if (_containRevisons != null && Branches.Items.Count == 1)
-                    Branches.SelectedIndex = 0;
-                else
-                    Branches.Text = null;
+                return result.ToList();
             }
         }
 
@@ -251,7 +271,9 @@ namespace GitUI.CommandsDialogs
         {
             DialogResult = OkClick();
             if (DialogResult == DialogResult.OK)
+            {
                 Close();
+            }
         }
 
         private DialogResult OkClick()
@@ -260,23 +282,27 @@ namespace GitUI.CommandsDialogs
             // if the user hits [Enter] at any point, we need to trigger txtCustomBranchName Leave event
             Ok.Focus();
 
-            GitCheckoutBranchCmd cmd = new GitCheckoutBranchCmd(Branches.Text.Trim(), Remotebranch.Checked);
+            var branchName = Branches.Text.Trim();
+            var isRemote = Remotebranch.Checked;
+            var newBranchName = (string)null;
+            var newBranchMode = CheckoutNewBranchMode.DontCreate;
 
-            if (Remotebranch.Checked)
+            if (isRemote)
             {
                 if (rbCreateBranchWithCustomName.Checked)
                 {
-                    cmd.NewBranchName = txtCustomBranchName.Text.Trim();
-                    cmd.NewBranchAction = GitCheckoutBranchCmd.NewBranch.Create;
-                    if (cmd.NewBranchName.IsNullOrWhiteSpace())
+                    newBranchName = txtCustomBranchName.Text.Trim();
+                    newBranchMode = CheckoutNewBranchMode.Create;
+                    if (newBranchName.IsNullOrWhiteSpace())
                     {
                         MessageBox.Show(_customBranchNameIsEmpty.Text, Text);
                         DialogResult = DialogResult.None;
                         return DialogResult.None;
                     }
-                    if (!Module.CheckBranchFormat(cmd.NewBranchName))
+
+                    if (!Module.CheckBranchFormat(newBranchName))
                     {
-                        MessageBox.Show(string.Format(_customBranchNameIsNotValid.Text, cmd.NewBranchName), Text);
+                        MessageBox.Show(string.Format(_customBranchNameIsNotValid.Text, newBranchName), Text);
                         DialogResult = DialogResult.None;
                         return DialogResult.None;
                     }
@@ -284,64 +310,72 @@ namespace GitUI.CommandsDialogs
                 else if (rbResetBranch.Checked)
                 {
                     IGitRef localBranchRef = GetLocalBranchRef(_localBranchName);
-                    IGitRef remoteBranchRef = GetRemoteBranchRef(cmd.BranchName);
+                    IGitRef remoteBranchRef = GetRemoteBranchRef(branchName);
                     if (localBranchRef != null && remoteBranchRef != null)
                     {
-                        string mergeBaseGuid = Module.GetMergeBase(localBranchRef.Guid, remoteBranchRef.Guid);
-                        bool isResetFastForward = localBranchRef.Guid.Equals(mergeBaseGuid);
+                        var mergeBaseGuid = Module.GetMergeBase(localBranchRef.ObjectId, remoteBranchRef.ObjectId);
+                        var isResetFastForward = localBranchRef.Guid == mergeBaseGuid?.ToString();
+
                         if (!isResetFastForward)
                         {
-                            string mergeBaseText = mergeBaseGuid.IsNullOrWhiteSpace()
+                            string mergeBaseText = mergeBaseGuid == null
                                 ? "merge base"
-                                : GitRevision.ToShortSha(mergeBaseGuid);
+                                : mergeBaseGuid.ToShortString();
 
                             string warningMessage = string.Format(_resetNonFastForwardBranch.Text, _localBranchName, mergeBaseText);
-                            if (MessageBox.Show(this, warningMessage, resetCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation) == DialogResult.No)
+
+                            if (MessageBox.Show(this, warningMessage, _resetCaption.Text, MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation) == DialogResult.No)
                             {
                                 DialogResult = DialogResult.None;
                                 return DialogResult.None;
                             }
                         }
                     }
-                    cmd.NewBranchAction = GitCheckoutBranchCmd.NewBranch.Reset;
-                    cmd.NewBranchName = _localBranchName;
+
+                    newBranchMode = CheckoutNewBranchMode.Reset;
+                    newBranchName = _localBranchName;
                 }
                 else
                 {
-                    cmd.NewBranchAction = GitCheckoutBranchCmd.NewBranch.DontCreate;
-                    cmd.NewBranchName = null;
+                    newBranchMode = CheckoutNewBranchMode.DontCreate;
                 }
             }
 
-            LocalChangesAction changes = ChangesMode;
-            if (changes != LocalChangesAction.Reset &&
-                chkSetLocalChangesActionAsDefault.Checked)
+            var localChanges = ChangesMode;
+            if (localChanges != LocalChangesAction.Reset && chkSetLocalChangesActionAsDefault.Checked)
             {
-                AppSettings.CheckoutBranchAction = changes;
+                AppSettings.CheckoutBranchAction = localChanges;
             }
 
-            if ((Visible || AppSettings.UseDefaultCheckoutBranchAction) && HasUncommittedChanges)
-                cmd.LocalChanges = changes;
-            else
-                cmd.LocalChanges = LocalChangesAction.DontChange;
+            if ((!Visible && !AppSettings.UseDefaultCheckoutBranchAction) || !HasUncommittedChanges)
+            {
+                localChanges = LocalChangesAction.DontChange;
+            }
 
             IWin32Window owner = Visible ? this : Owner;
 
             bool stash = false;
-            if (changes == LocalChangesAction.Stash)
+            if (localChanges == LocalChangesAction.Stash)
             {
                 if (_isDirtyDir == null && Visible)
+                {
                     _isDirtyDir = Module.IsDirtyDir();
+                }
+
                 stash = _isDirtyDir == true;
                 if (stash)
+                {
                     UICommands.StashSave(owner, AppSettings.IncludeUntrackedFilesInAutoStash);
+                }
             }
 
-            var originalHash = Module.GetCurrentCheckout();
+            var originalId = Module.GetCurrentCheckout();
+
+            Debug.Assert(originalId != null, "originalId != null");
 
             ScriptManager.RunEventScripts(this, ScriptEvent.BeforeCheckout);
 
-            if (UICommands.StartCommandLineProcessDialog(cmd, owner))
+            if (UICommands.StartCommandLineProcessDialog(owner, new GitCheckoutBranchCmd(branchName, isRemote, localChanges, newBranchMode, newBranchName)))
             {
                 if (stash)
                 {
@@ -350,27 +384,31 @@ namespace GitUI.CommandsDialogs
                     {
                         DialogResult res = cTaskDialog.MessageBox(
                             this,
-                            _applyShashedItemsAgainCaption.Text,
+                            _applyStashedItemsAgainCaption.Text,
                             "",
-                            _applyShashedItemsAgain.Text,
+                            _applyStashedItemsAgain.Text,
                             "",
                             "",
                             _dontShowAgain.Text,
                             eTaskDialogButtons.YesNo,
                             eSysIcons.Question,
                             eSysIcons.Question);
-                        messageBoxResult = (res == DialogResult.Yes);
+                        messageBoxResult = res == DialogResult.Yes;
                         if (cTaskDialog.VerificationChecked)
+                        {
                             AppSettings.AutoPopStashAfterCheckoutBranch = messageBoxResult;
+                        }
                     }
+
                     if (messageBoxResult ?? false)
                     {
                         UICommands.StashPop(this);
                     }
                 }
 
-                var currentHash = Module.GetCurrentCheckout();
-                if (!string.Equals(originalHash, currentHash, StringComparison.OrdinalIgnoreCase))
+                var currentId = Module.GetCurrentCheckout();
+
+                if (originalId != currentId)
                 {
                     UICommands.UpdateSubmodules(this);
                 }
@@ -381,26 +419,33 @@ namespace GitUI.CommandsDialogs
             }
 
             return DialogResult.None;
-        }
 
-        private void BranchTypeChanged()
-        {
-            if (!_isLoading)
+            IGitRef GetLocalBranchRef(string name)
             {
-                PopulateBranches();
+                return GetLocalBranches().FirstOrDefault(head => head.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            }
+
+            IGitRef GetRemoteBranchRef(string name)
+            {
+                return GetRemoteBranches().FirstOrDefault(head => head.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             }
         }
 
         private void LocalBranchCheckedChanged(object sender, EventArgs e)
         {
-            //We only need to refresh the dialog once -> RemoteBranchCheckedChanged will trigger this
-            //BranchTypeChanged();
+            // We only need to refresh the dialog once -> RemoteBranchCheckedChanged will trigger this
+            ////BranchTypeChanged();
         }
 
         private void RemoteBranchCheckedChanged(object sender, EventArgs e)
         {
             RecalculateSizeConstraints();
-            BranchTypeChanged();
+
+            if (!_isLoading)
+            {
+                PopulateBranches();
+            }
+
             Branches_SelectedIndexChanged(sender, e);
         }
 
@@ -408,22 +453,9 @@ namespace GitUI.CommandsDialogs
         {
             txtCustomBranchName.Enabled = rbCreateBranchWithCustomName.Checked;
             if (rbCreateBranchWithCustomName.Checked)
+            {
                 txtCustomBranchName.SelectAll();
-        }
-
-        private bool LocalBranchExists(string name)
-        {
-            return GetLocalBranches().Any(head => head.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-        }
-
-        private IGitRef GetLocalBranchRef(string name)
-        {
-            return GetLocalBranches().FirstOrDefault(head => head.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-        }
-
-        private IGitRef GetRemoteBranchRef(string name)
-        {
-            return GetRemoteBranches().FirstOrDefault(head => head.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            }
         }
 
         private void Branches_SelectedIndexChanged(object sender, EventArgs e)
@@ -439,7 +471,7 @@ namespace GitUI.CommandsDialogs
             }
             else
             {
-                _remoteName = GitCommandHelpers.GetRemoteName(branch, Module.GetRemotes(false));
+                _remoteName = GitRefName.GetRemoteName(branch, Module.GetRemoteNames());
                 _localBranchName = Module.GetLocalTrackingBranchName(_remoteName, branch);
                 var remoteBranchName = _remoteName.Length > 0 ? branch.Substring(_remoteName.Length + 1) : branch;
                 _newLocalBranchName = string.Concat(_remoteName, "_", remoteBranchName);
@@ -450,6 +482,7 @@ namespace GitUI.CommandsDialogs
                     i++;
                 }
             }
+
             bool existsLocalBranch = LocalBranchExists(_localBranchName);
 
             rbResetBranch.Text = existsLocalBranch ? _rbResetBranchDefaultText : _createBranch.Text;
@@ -457,18 +490,42 @@ namespace GitUI.CommandsDialogs
             txtCustomBranchName.Text = _newLocalBranchName;
 
             if (branch.IsNullOrWhiteSpace())
+            {
                 lbChanges.Text = "";
+            }
             else
             {
-                Task.Factory.StartNew(() => Module.GetCommitCountString(Module.GetCurrentCheckout(), branch))
-                    .ContinueWith(t => lbChanges.Text = t.Result, TaskScheduler.FromCurrentSynchronizationContext());
+                ThreadHelper.JoinableTaskFactory.RunAsync(
+                    async () =>
+                    {
+                        await TaskScheduler.Default;
+
+                        var currentCheckout = Module.GetCurrentCheckout();
+
+                        Debug.Assert(currentCheckout != null, "currentCheckout != null");
+
+                        var text = Module.GetCommitCountString(currentCheckout.ToString(), branch);
+
+                        await this.SwitchToMainThreadAsync();
+
+                        lbChanges.Text = text;
+                    });
+            }
+
+            return;
+
+            bool LocalBranchExists(string name)
+            {
+                return GetLocalBranches().Any(head => head.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             }
         }
 
         private IEnumerable<IGitRef> GetLocalBranches()
         {
             if (_localBranches == null)
+            {
                 _localBranches = Module.GetRefs(false);
+            }
 
             return _localBranches;
         }
@@ -476,73 +533,29 @@ namespace GitUI.CommandsDialogs
         private IEnumerable<IGitRef> GetRemoteBranches()
         {
             if (_remoteBranches == null)
-                _remoteBranches = Module.GetRefs(true, true).Where(h => h.IsRemote && !h.IsTag);
+            {
+                _remoteBranches = Module.GetRefs(true, true).Where(h => h.IsRemote && !h.IsTag).ToList();
+            }
 
             return _remoteBranches;
         }
-
-        private IList<string> GetContainsRevisionBranches()
-        {
-            var result = new HashSet<string>();
-            if (_containRevisons.Length > 0)
-            {
-                var branches = Module.GetAllBranchesWhichContainGivenCommit(_containRevisons[0], LocalBranch.Checked,
-                        !LocalBranch.Checked)
-                        .Where(a => !GitModule.IsDetachedHead(a) &&
-                                    !a.EndsWith("/HEAD"));
-                result.UnionWith(branches);
-
-            }
-            for (int index = 1; index < _containRevisons.Length; index++)
-            {
-                var containRevison = _containRevisons[index];
-                var branches =
-                    Module.GetAllBranchesWhichContainGivenCommit(containRevison, LocalBranch.Checked,
-                        !LocalBranch.Checked)
-                        .Where(a => !GitModule.IsDetachedHead(a) &&
-                                    !a.EndsWith("/HEAD"));
-                result.IntersectWith(branches);
-            }
-            return result.ToList();
-        }
-
 
         private void FormCheckoutBranch_Activated(object sender, EventArgs e)
         {
             Branches.Focus();
         }
 
-        private void FormCheckoutBranch_Shown(object sender, EventArgs e)
-        {
-            Shown -= FormCheckoutBranch_Shown;
-            RecalculateSizeConstraints();
-        }
-
         private void RecalculateSizeConstraints()
         {
-            if (!EnvUtils.IsMonoRuntime())
-            {
-                MinimumSize = MaximumSize = new Size(0, 0);
-            }
+            MinimumSize = MaximumSize = new Size(0, 0);
 
             remoteOptionsPanel.Visible = Remotebranch.Checked;
             tableLayoutPanel1.RowStyles[2].Height = Remotebranch.Checked ? _controls[remoteOptionsPanel] : 0;
             tableLayoutPanel1.Height = _controls.Select(c => c.Key.Visible ? c.Value : 0).Sum() + tableLayoutPanel1.Padding.Top + tableLayoutPanel1.Padding.Bottom;
             Height = tableLayoutPanel1.Height + tableLayoutPanel1.Margin.Top + tableLayoutPanel1.Margin.Bottom + 40;
 
-            if (EnvUtils.IsMonoRuntime())
-            {
-                var minWidth = tableLayoutPanel1.PreferredSize.Width;
-                if (Width < minWidth)
-                {
-                    Width = minWidth;
-                }
-            }
-            else
-            {
-                MinimumSize = new Size(tableLayoutPanel1.PreferredSize.Width + 40, Height);
-                MaximumSize = new Size(Screen.PrimaryScreen.Bounds.Width, Height);
-            }
+            MinimumSize = new Size(tableLayoutPanel1.PreferredSize.Width + 40, Height);
+            MaximumSize = new Size(Screen.PrimaryScreen.Bounds.Width, Height);
         }
 
         private void rbReset_CheckedChanged(object sender, EventArgs e)
@@ -565,6 +578,17 @@ namespace GitUI.CommandsDialogs
             var normalisedBranchName = _branchNameNormaliser.Normalise(txtCustomBranchName.Text, _gitBranchNameOptions);
             txtCustomBranchName.Text = normalisedBranchName;
             txtCustomBranchName.SelectionStart = caretPosition;
+        }
+
+        private void Branches_Validating(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            e.Cancel = Branches.SelectedIndex == -1 || !Branches.Items.Contains(Branches.Text);
+            Errors.SetError(Branches, e.Cancel ? _invalidBranchName.ToString() : "");
+        }
+
+        private void Branches_TextChanged(object sender, EventArgs e)
+        {
+            Errors.SetError(Branches, "");
         }
     }
 }

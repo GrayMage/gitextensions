@@ -1,22 +1,37 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Drawing;
 using System.Windows.Forms;
+using GitExtUtils.GitUI;
 using GitUI.Script;
+using GitUIPluginInterfaces;
 
 namespace GitUI.CommandsDialogs
 {
     public partial class FormDeleteTag : GitModuleForm
-    { 
-        public FormDeleteTag(GitUICommands aCommands, string tag)
-            : base(aCommands)
+    {
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
+        private FormDeleteTag()
         {
-            InitializeComponent(); Translate();
+            InitializeComponent();
+        }
+
+        public FormDeleteTag(GitUICommands commands, string tag)
+            : base(commands)
+        {
+            InitializeComponent();
+
+            // scale up for hi DPI
+            MaximumSize = DpiUtil.Scale(new Size(1000, 210));
+            MinimumSize = DpiUtil.Scale(new Size(470, 210));
+
+            InitializeComplete();
             Tag = tag;
         }
 
         private void FormDeleteTagLoad(object sender, EventArgs e)
         {
-            Tags.DisplayMember = "Name";
+            Tags.DisplayMember = nameof(IGitRef.Name);
             Tags.DataSource = Module.GetRefs(true, false);
             Tags.Text = Tag as string;
             remotesComboboxControl1.SelectedRemote = Module.GetCurrentRemote();
@@ -30,7 +45,9 @@ namespace GitUI.CommandsDialogs
                 Module.DeleteTag(Tags.Text);
 
                 if (deleteTag.Checked && !string.IsNullOrEmpty(Tags.Text))
+                {
                     RemoveRemoteTag(Tags.Text);
+                }
 
                 DialogResult = DialogResult.OK;
                 Close();
@@ -48,10 +65,10 @@ namespace GitUI.CommandsDialogs
             ScriptManager.RunEventScripts(this, ScriptEvent.BeforePush);
 
             using (var form = new FormRemoteProcess(Module, pushCmd)
-                                    {
-                                        ////Remote = currentRemote,
-                                        ////Text = string.Format(_deleteFromCaption.Text, currentRemote),
-                                    })
+            {
+                ////Remote = currentRemote,
+                ////Text = string.Format(_deleteFromCaption.Text, currentRemote),
+            })
             {
                 form.ShowDialog();
 

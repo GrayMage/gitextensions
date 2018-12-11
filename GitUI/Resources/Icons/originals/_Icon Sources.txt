@@ -1,3 +1,25 @@
+Fugue Icons
+===========
+
+Many icons taken from the "fugue" icon set by Yusuke Kamiyamane.
+Licensed under a Creative Commons Attribution 3.0 License.
+
+http://p.yusukekamiyamane.com/
+https://github.com/yusukekamiyamane/fugue-icons
+
+We are using the shadowless versions of the icons.
+
+It is possible to manually combine elements from within
+the set to create new icons.
+
+Gimp's "Colourise" feature can be used to rotate hues and
+obtain different coloured versions in many cases.
+
+See the full set of available icons here:
+
+https://raw.githubusercontent.com/yusukekamiyamane/fugue-icons/master/all-shadowless.png
+
+
 From Open Icon Library
 ======================
 char-scorpio.png
@@ -38,6 +60,8 @@ fatcow
 ------
 - http://www.fatcow.com/free-icons
 - Lisence: Creative Commons (Attribution 3.0 United States)
+bullet_add.png
+bullet_delete.png
 database_save_a*.png
 database*.png
 fatcow_*
@@ -54,7 +78,7 @@ Misc
 Revert16.png
 RvisionHistory16.png
   both: recreated from bmp
-   
+
 branch-led-orig.png
 -------------------
 http://www.iconfinder.com/browse/iconset/ledicons/, License:
@@ -63,3 +87,19 @@ http://www.iconfinder.com/browse/iconset/ledicons/, License:
     http://led24.de/iconset/ or http://led24.de/ would be appreciated.
     Follow us on twitter http://twitter.com/gasyoun or email leds24@gmail.com
     512 icons 20/05/2009
+
+Microsoft Visual Studio 2017 Images
+===================================
+All images in the GitUI/Resources/Icons/VS2017Images folder.
+See https://docs.microsoft.com/en-us/visualstudio/designers/the-visual-studio-image-library
+
+bgblue.png
+bggrey.png
+--------------
+https://www.vecteezy.com/vector-art/136250-rhinestone-abstract-background-vector
+    Copyright: noodledoodle
+
+    You are allowed to:
+    Download to obtain the non-exclusive right to use Eezy files to create new, derivative, unique works, however the original Eezy file or artwork must be largely unrecognizable.
+    Download, edit, and remix for personal and commercial use, but give credit back to the author:
+        Illustration credit: www.Vecteezy.com

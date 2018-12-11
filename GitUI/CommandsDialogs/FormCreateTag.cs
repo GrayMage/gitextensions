@@ -2,59 +2,62 @@
 using System.Drawing;
 using System.Windows.Forms;
 using GitCommands;
-using GitUI.Script;
-using ResourceManager;
-using GitCommands.Git;
 using GitCommands.Git.Tag;
+using GitUI.Script;
+using GitUIPluginInterfaces;
+using JetBrains.Annotations;
+using ResourceManager;
 
 namespace GitUI.CommandsDialogs
 {
     public sealed partial class FormCreateTag : GitModuleForm
     {
         private readonly TranslationString _messageCaption = new TranslationString("Tag");
-
-        private readonly TranslationString _noRevisionSelected =
-            new TranslationString("Select 1 revision to create the tag on.");
-
+        private readonly TranslationString _noRevisionSelected = new TranslationString("Select 1 revision to create the tag on.");
         private readonly TranslationString _pushToCaption = new TranslationString("Push tag to '{0}'");
-
-        private string _currentRemote = "";
-
-        private static readonly TranslationString _trsLigthweight = new TranslationString("Lightweight tag");
+        private static readonly TranslationString _trsLightweight = new TranslationString("Lightweight tag");
         private static readonly TranslationString _trsAnnotated = new TranslationString("Annotated tag");
         private static readonly TranslationString _trsSignDefault = new TranslationString("Sign with default GPG");
         private static readonly TranslationString _trsSignSpecificKey = new TranslationString("Sign with specific GPG");
 
-        private static readonly string[] DropwdownTagOperation = { _trsLigthweight.Text, _trsAnnotated.Text, _trsSignDefault.Text, _trsSignSpecificKey.Text };
         private readonly IGitTagController _gitTagController;
+        private string _currentRemote = "";
 
-
-        public FormCreateTag(GitUICommands aCommands, GitRevision revision)
-            : base(aCommands)
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
+        private FormCreateTag()
         {
             InitializeComponent();
-            Translate();
+        }
 
-            annotate.Items.AddRange(DropwdownTagOperation);
+        public FormCreateTag([NotNull] GitUICommands commands, [CanBeNull] ObjectId objectId)
+            : base(commands)
+        {
+            InitializeComponent();
+            InitializeComplete();
+
+            annotate.Items.AddRange(new object[] { _trsLightweight.Text, _trsAnnotated.Text, _trsSignDefault.Text, _trsSignSpecificKey.Text });
             annotate.SelectedIndex = 0;
 
-            tagMessage.MistakeFont = new Font(SystemFonts.MessageBoxFont, FontStyle.Underline);
-            commitPickerSmallControl1.UICommandsSource = this;
-            if (IsUICommandsInitialized)
-                commitPickerSmallControl1.SetSelectedCommitHash(revision == null ? Module.GetCurrentCheckout() : revision.Guid);
+            tagMessage.MistakeFont = new Font(tagMessage.MistakeFont, FontStyle.Underline);
 
-            if (aCommands != null)
+            objectId = objectId ?? Module.GetCurrentCheckout();
+            if (objectId != null)
             {
-                _gitTagController = new GitTagController(aCommands);
+                commitPickerSmallControl1.SetSelectedCommitHash(objectId.ToString());
             }
+
+            _gitTagController = new GitTagController(commands);
         }
 
         private void FormCreateTag_Load(object sender, EventArgs e)
         {
             textBoxTagName.Select();
             _currentRemote = Module.GetCurrentRemote();
-            if (String.IsNullOrEmpty(_currentRemote))
+            if (string.IsNullOrEmpty(_currentRemote))
+            {
                 _currentRemote = "origin";
+            }
+
             pushTag.Text = string.Format(_pushToCaption.Text, _currentRemote);
         }
 
@@ -65,7 +68,9 @@ namespace GitUI.CommandsDialogs
                 var tagName = CreateTag();
 
                 if (pushTag.Checked && !string.IsNullOrEmpty(tagName))
+                {
                     PushTag(tagName);
+                }
             }
             catch (Exception ex)
             {
@@ -75,14 +80,16 @@ namespace GitUI.CommandsDialogs
 
         private string CreateTag()
         {
-            if (string.IsNullOrWhiteSpace(commitPickerSmallControl1.SelectedCommitHash))
+            var objectId = commitPickerSmallControl1.SelectedObjectId;
+
+            if (objectId == null)
             {
                 MessageBox.Show(this, _noRevisionSelected.Text, _messageCaption.Text);
-                return string.Empty;
+                return "";
             }
 
             var createTagArgs = new GitCreateTagArgs(textBoxTagName.Text,
-                                                     commitPickerSmallControl1.SelectedCommitHash,
+                                                     objectId,
                                                      GetSelectedOperation(annotate.SelectedIndex),
                                                      tagMessage.Text,
                                                      textBoxGpgKey.Text,
@@ -90,7 +97,7 @@ namespace GitUI.CommandsDialogs
             var success = _gitTagController.CreateTag(createTagArgs, this);
             if (!success)
             {
-                return string.Empty;
+                return "";
             }
 
             DialogResult = DialogResult.OK;
@@ -109,7 +116,6 @@ namespace GitUI.CommandsDialogs
                 Text = string.Format(_pushToCaption.Text, _currentRemote),
             })
             {
-
                 form.ShowDialog();
 
                 if (!Module.InTheMiddleOfAction() && !form.ErrorOccurred())
@@ -127,27 +133,21 @@ namespace GitUI.CommandsDialogs
             tagMessage.Enabled = tagOperation.CanProvideMessage();
         }
 
-        private TagOperation GetSelectedOperation(int dropdownSelection)
+        private static TagOperation GetSelectedOperation(int dropdownSelection)
         {
-            TagOperation returnValue = TagOperation.Lightweight;
             switch (dropdownSelection)
             {
                 case 0:
-                    returnValue = TagOperation.Lightweight;
-                    break;
+                    return TagOperation.Lightweight;
                 case 1:
-                    returnValue = TagOperation.Annotate;
-                    break;
+                    return TagOperation.Annotate;
                 case 2:
-                    returnValue = TagOperation.SignWithDefaultKey;
-                    break;
+                    return TagOperation.SignWithDefaultKey;
                 case 3:
-                    returnValue = TagOperation.SignWithSpecificKey;
-                    break;
+                    return TagOperation.SignWithSpecificKey;
                 default:
                     throw new NotSupportedException("Invalid dropdownSelection");
             }
-            return returnValue;
         }
     }
 }

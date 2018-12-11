@@ -4,16 +4,18 @@ using System.ComponentModel.Composition.Hosting;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace GitUIPluginInterfaces
 {
-    public class ManagedExtensibility
+    public static class ManagedExtensibility
     {
         private static List<CompositionContainer> _compositionContainers;
 
         private static readonly object compositionContainerSyncObj = new object();
+
+        private static readonly HashSet<string> _loggedExceptionMessages = new HashSet<string>();
 
         /// <summary>
         /// The MEF container.
@@ -39,26 +41,57 @@ namespace GitUIPluginInterfaces
             }
         }
 
-        public static IEnumerable<Lazy<T, TMetadataView>> GetExports<T, TMetadataView>()
+        public static IEnumerable<Lazy<T>> GetExports<T>()
         {
-            var ret = new List<Lazy<T, TMetadataView>>();
-            foreach(var container in GetCompositionContainers())
+            var ret = new List<Lazy<T>>();
+            foreach (var container in GetCompositionContainers())
             {
                 try
                 {
-                    var exps = container.GetExports<T, TMetadataView>();
-                    ret.AddRange(exps);
+                    ret.AddRange(container.GetExports<T>());
                 }
-                catch (System.Reflection.ReflectionTypeLoadException ex)
+                catch (ReflectionTypeLoadException ex)
                 {
                     Trace.TraceError("GetExports() failed {0}", string.Join(Environment.NewLine, ex.LoaderExceptions.Select(r => r.ToString())));
                 }
                 catch (Exception ex)
                 {
-                    Trace.TraceError("Failed to get exports, {0}", ex.ToString());
+                    Trace.TraceError("Failed to get exports, {0}", ex);
                 }
             }
+
             return ret;
+        }
+
+        public static IEnumerable<Lazy<T, TMetadataView>> GetExports<T, TMetadataView>()
+        {
+            var ret = new List<Lazy<T, TMetadataView>>();
+            foreach (var container in GetCompositionContainers())
+            {
+                try
+                {
+                    ret.AddRange(container.GetExports<T, TMetadataView>());
+                }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    var exceptions = ex.LoaderExceptions.Where(ShouldLogException).ToList();
+                    if (exceptions.Count != 0)
+                    {
+                        Trace.TraceError("Failed to load type when getting exports: {0}", string.Join(Environment.NewLine, exceptions.Select(r => r.ToString())));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (ShouldLogException(ex))
+                    {
+                        Trace.TraceError("Failed to get exports: {0}", ex);
+                    }
+                }
+            }
+
+            return ret;
+
+            bool ShouldLogException(Exception e) => _loggedExceptionMessages.Add(e.Message);
         }
     }
 }

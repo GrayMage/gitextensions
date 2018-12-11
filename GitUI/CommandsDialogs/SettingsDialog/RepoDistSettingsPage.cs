@@ -5,20 +5,17 @@ namespace GitUI.CommandsDialogs.SettingsDialog
 {
     public class RepoDistSettingsPage : SettingsPageWithHeader, IRepoDistSettingsPage
     {
-        protected RepoDistSettingsSet RepoDistSettingsSet { get { return CommonLogic.RepoDistSettingsSet; } }
+        protected RepoDistSettingsSet RepoDistSettingsSet => CommonLogic.RepoDistSettingsSet;
         protected RepoDistSettings CurrentSettings { get; private set; }
 
-        protected override void Init(ISettingsPageHost aPageHost)
+        protected override void Init(ISettingsPageHost pageHost)
         {
-            base.Init(aPageHost);
+            base.Init(pageHost);
 
             CurrentSettings = RepoDistSettingsSet.EffectiveSettings;
         }
 
-        protected override bool AreEffectiveSettings
-        {
-            get { return CurrentSettings == RepoDistSettingsSet.EffectiveSettings; }
-        }
+        protected override bool AreEffectiveSettings => CurrentSettings == RepoDistSettingsSet.EffectiveSettings;
 
         protected override ISettingsSource GetCurrentSettings()
         {
@@ -28,47 +25,45 @@ namespace GitUI.CommandsDialogs.SettingsDialog
         public void SetEffectiveSettings()
         {
             if (RepoDistSettingsSet != null)
+            {
                 SetCurrentSettings(RepoDistSettingsSet.EffectiveSettings);
+            }
         }
 
         public void SetLocalSettings()
         {
             if (RepoDistSettingsSet != null)
+            {
                 SetCurrentSettings(RepoDistSettingsSet.LocalSettings);
+            }
         }
 
         public override void SetGlobalSettings()
         {
             if (RepoDistSettingsSet != null)
+            {
                 SetCurrentSettings(RepoDistSettingsSet.GlobalSettings);
+            }
         }
 
         public void SetRepoDistSettings()
         {
             if (RepoDistSettingsSet != null)
+            {
                 SetCurrentSettings(RepoDistSettingsSet.RepoDistSettings);
+            }
         }
 
         private void SetCurrentSettings(RepoDistSettings settings)
         {
             if (CurrentSettings != null)
+            {
                 SaveSettings();
+            }
 
             CurrentSettings = settings;
 
             LoadSettings();
-        }
-
-        private void InitializeComponent()
-        {
-            this.SuspendLayout();
-            // 
-            // RepoDistSettingsPage
-            // 
-            this.Name = "RepoDistSettingsPage";
-            this.Size = new System.Drawing.Size(951, 518);
-            this.ResumeLayout(false);
-
         }
     }
 }

@@ -8,13 +8,16 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
         {
             InitializeComponent();
             Text = "Advanced";
-            Translate();
+            InitializeComplete();
 
-            var autoNormaliseSymbols = new[] {
-                new { Key =  "_", Value = "_" },
-                new { Key =  "-", Value = "-" },
-                new { Key =  "(none)", Value = "" },
+            var autoNormaliseSymbols = new[]
+            {
+                new { Key = "_", Value = "_" },
+                new { Key = "-", Value = "-" },
+                new { Key = "(none)", Value = "" },
             };
+            cboAutoNormaliseSymbol.DisplayMember = "Key";
+            cboAutoNormaliseSymbol.ValueMember = "Value";
             cboAutoNormaliseSymbol.DataSource = autoNormaliseSymbols;
             cboAutoNormaliseSymbol.SelectedIndex = 0;
         }
@@ -25,6 +28,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
             chkUseLocalChangesAction.Checked = AppSettings.UseDefaultCheckoutBranchAction;
             chkDontSHowHelpImages.Checked = AppSettings.DontShowHelpImages;
             chkAlwaysShowAdvOpt.Checked = AppSettings.AlwaysShowAdvOpt;
+            chkCheckForUpdates.Checked = AppSettings.CheckForUpdates;
             chkCheckForRCVersions.Checked = AppSettings.CheckForReleaseCandidates;
             chkConsoleEmulator.Checked = AppSettings.UseConsoleEmulatorForCommands;
             chkAutoNormaliseBranchName.Checked = AppSettings.AutoNormaliseBranchName;
@@ -39,6 +43,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
             AppSettings.UseDefaultCheckoutBranchAction = chkUseLocalChangesAction.Checked;
             AppSettings.DontShowHelpImages = chkDontSHowHelpImages.Checked;
             AppSettings.AlwaysShowAdvOpt = chkAlwaysShowAdvOpt.Checked;
+            AppSettings.CheckForUpdates = chkCheckForUpdates.Checked;
             AppSettings.CheckForReleaseCandidates = chkCheckForRCVersions.Checked;
             AppSettings.UseConsoleEmulatorForCommands = chkConsoleEmulator.Checked;
             AppSettings.AutoNormaliseBranchName = chkAutoNormaliseBranchName.Checked;
@@ -50,7 +55,6 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
         {
             return new SettingsPageReferenceByType(typeof(AdvancedSettingsPage));
         }
-
 
         private void chkAutoNormaliseBranchName_CheckedChanged(object sender, System.EventArgs e)
         {

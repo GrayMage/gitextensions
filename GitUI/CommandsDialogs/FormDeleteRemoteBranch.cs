@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using GitCommands;
-using ResourceManager;
-using GitUIPluginInterfaces;
-using System.IO;
+using GitCommands.Git;
 using GitUI.Script;
+using GitUIPluginInterfaces;
+using ResourceManager;
 
 namespace GitUI.CommandsDialogs
 {
@@ -17,15 +18,21 @@ namespace GitUI.CommandsDialogs
         private readonly TranslationString _confirmDeleteUnmergedRemoteBranchMessage =
             new TranslationString("At least one remote branch is unmerged. Are you sure you want to delete it?" + Environment.NewLine + "Deleting a branch can cause commits to be deleted too!");
 
-        private readonly string _defaultRemoteBranch;
         private readonly HashSet<string> _mergedBranches = new HashSet<string>();
+        private readonly string _defaultRemoteBranch;
 
-        public FormDeleteRemoteBranch(GitUICommands aCommands, string defaultRemoteBranch)
-            : base(aCommands)
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
+        private FormDeleteRemoteBranch()
         {
             InitializeComponent();
-            Translate();
+        }
+
+        public FormDeleteRemoteBranch(GitUICommands commands, string defaultRemoteBranch)
+            : base(commands)
+        {
             _defaultRemoteBranch = defaultRemoteBranch;
+            InitializeComponent();
+            InitializeComplete();
         }
 
         private void FormDeleteRemoteBranchLoad(object sender, EventArgs e)
@@ -63,17 +70,15 @@ namespace GitUI.CommandsDialogs
                     }
                 }
 
-                foreach (var remoteGroup in selectedBranches.GroupBy(b => b.Remote))
+                foreach (var (remote, branches) in selectedBranches.GroupBy(b => b.Remote))
                 {
-                    string remote = remoteGroup.Key;
-
                     EnsurePageant(remote);
 
-                    var cmd = new GitDeleteRemoteBranchesCmd(remote, remoteGroup);
+                    var cmd = new GitDeleteRemoteBranchesCmd(remote, branches.Select(x => x.LocalName));
 
                     ScriptManager.RunEventScripts(this, ScriptEvent.BeforePush);
 
-                    using (var form = new FormRemoteProcess(Module, cmd.ToLine())
+                    using (var form = new FormRemoteProcess(Module, cmd.Arguments)
                     {
                         Remote = remote
                     })
@@ -93,6 +98,7 @@ namespace GitUI.CommandsDialogs
             {
                 Trace.WriteLine(ex.Message);
             }
+
             Close();
         }
 

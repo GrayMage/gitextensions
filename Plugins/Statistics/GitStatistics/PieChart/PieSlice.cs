@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -9,7 +8,7 @@ namespace GitStatistics.PieChart
     /// <summary>
     ///   Object representing 3D pie.
     /// </summary>
-    public class PieSlice : Object, IDisposable
+    public class PieSlice : IDisposable
     {
         /// <summary>
         ///   Angle offset used to define reference angle for gradual shadow.
@@ -29,12 +28,12 @@ namespace GitStatistics.PieChart
         /// <summary>
         ///   Style used for shadow.
         /// </summary>
-        private readonly ShadowStyle _shadowStyle = ShadowStyle.NoShadow;
+        private readonly ShadowStyle _shadowStyle;
 
         /// <summary>
         ///   Color of the surface.
         /// </summary>
-        private readonly Color _surfaceColor = Color.Empty;
+        private readonly Color _surfaceColor;
 
         /// <summary>
         ///   <c>Brush</c> used to render slice ending cut side.
@@ -82,25 +81,25 @@ namespace GitStatistics.PieChart
         protected Pen Pen;
 
         /// <summary>
-        ///   <c>PointF</c> on the periphery corresponding to the end cut 
+        ///   <c>PointF</c> on the periphery corresponding to the end cut
         ///   side.
         /// </summary>
         protected PointF PointEnd;
 
         /// <summary>
-        ///   <c>PointF</c> on the periphery corresponding to the end cut 
+        ///   <c>PointF</c> on the periphery corresponding to the end cut
         ///   side.
         /// </summary>
         protected PointF PointEndBelow;
 
         /// <summary>
-        ///   <c>PointF</c> on the periphery corresponding to the start cut 
+        ///   <c>PointF</c> on the periphery corresponding to the start cut
         ///   side.
         /// </summary>
         protected PointF PointStart;
 
         /// <summary>
-        ///   <c>PointF</c> on the periphery corresponding to the start cut 
+        ///   <c>PointF</c> on the periphery corresponding to the start cut
         ///   side.
         /// </summary>
         protected PointF PointStartBelow;
@@ -111,23 +110,23 @@ namespace GitStatistics.PieChart
         protected Quadrilateral StartSide = Quadrilateral.Empty;
 
         /// <summary>
-        ///   Initializes a new instance of flat <c>PieSlice</c> class with given 
+        ///   Initializes a new instance of flat <c>PieSlice</c> class with given
         ///   bounds and visual style.
         /// </summary>
         /// <param name = "xBoundingRect">
-        ///   x-coordinate of the upper-left corner of the rectangle that is 
+        ///   x-coordinate of the upper-left corner of the rectangle that is
         ///   used to draw the top surface of the pie slice.
         /// </param>
         /// <param name = "yBoundingRect">
-        ///   y-coordinate of the upper-left corner of the rectangle that is 
+        ///   y-coordinate of the upper-left corner of the rectangle that is
         ///   used to draw the top surface of the pie slice.
         /// </param>
         /// <param name = "widthBoundingRect">
-        ///   Width of the rectangle that is used to draw the top surface of 
+        ///   Width of the rectangle that is used to draw the top surface of
         ///   the pie slice.
         /// </param>
         /// <param name = "heightBoundingRect">
-        ///   Height of the rectangle that is used to draw the top surface of 
+        ///   Height of the rectangle that is used to draw the top surface of
         ///   the pie slice.
         /// </param>
         /// <param name = "startAngle">
@@ -139,8 +138,9 @@ namespace GitStatistics.PieChart
         /// <param name = "surfaceColor">
         ///   Color used to paint the pie slice.
         /// </param>
-        public PieSlice(float xBoundingRect, float yBoundingRect, float widthBoundingRect,
-                        float heightBoundingRect, float startAngle, float sweepAngle, Color surfaceColor)
+        public PieSlice(
+            float xBoundingRect, float yBoundingRect, float widthBoundingRect,
+            float heightBoundingRect, float startAngle, float sweepAngle, Color surfaceColor)
             : this(
                 xBoundingRect, yBoundingRect, widthBoundingRect, heightBoundingRect, 0F, startAngle, sweepAngle,
                 surfaceColor, ShadowStyle.NoShadow, EdgeColorType.NoEdge)
@@ -148,23 +148,23 @@ namespace GitStatistics.PieChart
         }
 
         /// <summary>
-        ///   Initializes a new instance of <c>PieSlice</c> class with given 
+        ///   Initializes a new instance of <c>PieSlice</c> class with given
         ///   bounds and visual style.
         /// </summary>
         /// <param name = "xBoundingRect">
-        ///   x-coordinate of the upper-left corner of the rectangle that is 
+        ///   x-coordinate of the upper-left corner of the rectangle that is
         ///   used to draw the top surface of the pie slice.
         /// </param>
         /// <param name = "yBoundingRect">
-        ///   y-coordinate of the upper-left corner of the rectangle that is 
+        ///   y-coordinate of the upper-left corner of the rectangle that is
         ///   used to draw the top surface of the pie slice.
         /// </param>
         /// <param name = "widthBoundingRect">
-        ///   Width of the rectangle that is used to draw the top surface of 
+        ///   Width of the rectangle that is used to draw the top surface of
         ///   the pie slice.
         /// </param>
         /// <param name = "heightBoundingRect">
-        ///   Height of the rectangle that is used to draw the top surface of 
+        ///   Height of the rectangle that is used to draw the top surface of
         ///   the pie slice.
         /// </param>
         /// <param name = "sliceHeight">
@@ -185,23 +185,25 @@ namespace GitStatistics.PieChart
         /// <param name = "edgeColorType">
         ///   Edge color style used for slice rendering.
         /// </param>
-        public PieSlice(float xBoundingRect, float yBoundingRect, float widthBoundingRect,
-                        float heightBoundingRect, float sliceHeight, float startAngle, float sweepAngle,
-                        Color surfaceColor, ShadowStyle shadowStyle, EdgeColorType edgeColorType)
+        public PieSlice(
+            float xBoundingRect, float yBoundingRect, float widthBoundingRect,
+            float heightBoundingRect, float sliceHeight, float startAngle, float sweepAngle,
+            Color surfaceColor, ShadowStyle shadowStyle, EdgeColorType edgeColorType)
         {
             // set some persistent values
             _actualStartAngle = startAngle;
             _actualSweepAngle = sweepAngle;
             _surfaceColor = surfaceColor;
             _shadowStyle = shadowStyle;
+
             // create pens for rendering
             var edgeLineColor = EdgeColor.GetRenderingColor(edgeColorType, surfaceColor);
-            Pen = new Pen(edgeLineColor) {LineJoin = LineJoin.Round};
+            Pen = new Pen(edgeLineColor) { LineJoin = LineJoin.Round };
             InitializePieSlice(xBoundingRect, yBoundingRect, widthBoundingRect, heightBoundingRect, sliceHeight);
         }
 
         /// <summary>
-        ///   Initializes a new instance of <c>PieSlice</c> class with given 
+        ///   Initializes a new instance of <c>PieSlice</c> class with given
         ///   bounds and visual style.
         /// </summary>
         /// <param name = "boundingRect">
@@ -225,8 +227,9 @@ namespace GitStatistics.PieChart
         /// <param name = "edgeColorType">
         ///   Edge color type used for rendering.
         /// </param>
-        public PieSlice(RectangleF boundingRect, float sliceHeight, float startAngle, float sweepAngle,
-                        Color surfaceColor, ShadowStyle shadowStyle, EdgeColorType edgeColorType)
+        public PieSlice(
+            RectangleF boundingRect, float sliceHeight, float startAngle, float sweepAngle,
+            Color surfaceColor, ShadowStyle shadowStyle, EdgeColorType edgeColorType)
             : this(
                 boundingRect.X, boundingRect.Y, boundingRect.Width, boundingRect.Height, sliceHeight, startAngle,
                 sweepAngle, surfaceColor, shadowStyle, edgeColorType)
@@ -234,23 +237,23 @@ namespace GitStatistics.PieChart
         }
 
         /// <summary>
-        ///   Initializes a new instance of <c>PieSlice</c> class with given 
+        ///   Initializes a new instance of <c>PieSlice</c> class with given
         ///   bounds and visual style.
         /// </summary>
         /// <param name = "xBoundingRect">
-        ///   x-coordinate of the upper-left corner of the rectangle that is 
+        ///   x-coordinate of the upper-left corner of the rectangle that is
         ///   used to draw the top surface of the pie slice.
         /// </param>
         /// <param name = "yBoundingRect">
-        ///   y-coordinate of the upper-left corner of the rectangle that is 
+        ///   y-coordinate of the upper-left corner of the rectangle that is
         ///   used to draw the top surface of the pie slice.
         /// </param>
         /// <param name = "widthBoundingRect">
-        ///   Width of the rectangle that is used to draw the top surface of 
+        ///   Width of the rectangle that is used to draw the top surface of
         ///   the pie slice.
         /// </param>
         /// <param name = "heightBoundingRect">
-        ///   Height of the rectangle that is used to draw the top surface of 
+        ///   Height of the rectangle that is used to draw the top surface of
         ///   the pie slice.
         /// </param>
         /// <param name = "sliceHeight">
@@ -274,17 +277,19 @@ namespace GitStatistics.PieChart
         /// <param name = "edgeLineWidth">
         ///   Edge line width.
         /// </param>
-        public PieSlice(float xBoundingRect, float yBoundingRect, float widthBoundingRect,
-                        float heightBoundingRect, float sliceHeight, float startAngle, float sweepAngle,
-                        Color surfaceColor, ShadowStyle shadowStyle, EdgeColorType edgeColorType, float edgeLineWidth)
-            : this(xBoundingRect, yBoundingRect, widthBoundingRect, heightBoundingRect,
-                   sliceHeight, startAngle, sweepAngle, surfaceColor, shadowStyle, edgeColorType)
+        public PieSlice(
+            float xBoundingRect, float yBoundingRect, float widthBoundingRect,
+            float heightBoundingRect, float sliceHeight, float startAngle, float sweepAngle,
+            Color surfaceColor, ShadowStyle shadowStyle, EdgeColorType edgeColorType, float edgeLineWidth)
+            : this(
+                xBoundingRect, yBoundingRect, widthBoundingRect, heightBoundingRect,
+                sliceHeight, startAngle, sweepAngle, surfaceColor, shadowStyle, edgeColorType)
         {
             Pen.Width = edgeLineWidth;
         }
 
         /// <summary>
-        ///   Initializes a new instance of <c>PieSlice</c> class with given 
+        ///   Initializes a new instance of <c>PieSlice</c> class with given
         ///   bounds and visual style.
         /// </summary>
         /// <param name = "boundingRect">
@@ -311,9 +316,10 @@ namespace GitStatistics.PieChart
         /// <param name = "edgeLineWidth">
         ///   Edge line width.
         /// </param>
-        public PieSlice(Rectangle boundingRect, float sliceHeight, float startAngle, float sweepAngle,
-                        Color surfaceColor, ShadowStyle shadowStyle, EdgeColorType edgeColorType,
-                        float edgeLineWidth)
+        public PieSlice(
+            Rectangle boundingRect, float sliceHeight, float startAngle, float sweepAngle,
+            Color surfaceColor, ShadowStyle shadowStyle, EdgeColorType edgeColorType,
+            float edgeLineWidth)
             : this(
                 boundingRect.X, boundingRect.Y, boundingRect.Width, boundingRect.Height, sliceHeight, startAngle,
                 sweepAngle, surfaceColor, shadowStyle, edgeColorType, edgeLineWidth)
@@ -333,10 +339,7 @@ namespace GitStatistics.PieChart
         /// <summary>
         ///   Gets ending angle (in degrees) of the pie slice.
         /// </summary>
-        public float EndAngle
-        {
-            get { return (StartAngle + SweepAngle)%360; }
-        }
+        public float EndAngle => (StartAngle + SweepAngle) % 360;
 
         /// <summary>
         ///   Gets or sets the bounding rectangle.
@@ -360,6 +363,7 @@ namespace GitStatistics.PieChart
                 Pen.Dispose();
                 Pen = null;
             }
+
             DisposeBrushes();
         }
 
@@ -373,10 +377,11 @@ namespace GitStatistics.PieChart
         /// </param>
         public void Draw(Graphics graphics)
         {
-            // first draw wegde sides
+            // first draw wedge sides
             DrawVisibleStartSide(graphics);
             DrawVisibleEndSide(graphics);
             DrawVisiblePeriphery(graphics);
+
             // draw the top pie slice
             DrawTop(graphics);
         }
@@ -393,9 +398,15 @@ namespace GitStatistics.PieChart
         public bool Contains(PointF point)
         {
             if (PieSliceContainsPoint(point))
+            {
                 return true;
+            }
+
             if (PeripheryContainsPoint(point))
+            {
                 return true;
+            }
+
             return StartSide.Contains(point) || EndSide.Contains(point);
         }
 
@@ -411,40 +422,41 @@ namespace GitStatistics.PieChart
         internal PieSlice[] Split(float splitAngle)
         {
             var transformedSplitAngle = TransformAngle(splitAngle);
-            var pieSlice1 = (PieSlice) MemberwiseClone();
+            var pieSlice1 = (PieSlice)MemberwiseClone();
             pieSlice1.StartAngle = transformedSplitAngle;
-            pieSlice1.SweepAngle = (StartAngle + SweepAngle - transformedSplitAngle)%360;
+            pieSlice1.SweepAngle = (StartAngle + SweepAngle - transformedSplitAngle) % 360;
             pieSlice1.InitializeSides();
-            var pieSlice2 = (PieSlice) MemberwiseClone();
-            pieSlice2.SweepAngle = (transformedSplitAngle - StartAngle + 360)%360;
+            var pieSlice2 = (PieSlice)MemberwiseClone();
+            pieSlice2.SweepAngle = (transformedSplitAngle - StartAngle + 360) % 360;
             pieSlice2.InitializeSides();
-            return new[] {pieSlice1, pieSlice2};
+            return new[] { pieSlice1, pieSlice2 };
         }
 
         /// <summary>
-        ///   Reajusts the pie slice to fit new bounding rectangle provided.
+        ///   Readjusts the pie slice to fit new bounding rectangle provided.
         /// </summary>
         /// <param name = "xBoundingRect">
-        ///   x-coordinate of the upper-left corner of the rectangle that is 
+        ///   x-coordinate of the upper-left corner of the rectangle that is
         ///   used to draw the top surface of the pie slice.
         /// </param>
         /// <param name = "yBoundingRect">
-        ///   y-coordinate of the upper-left corner of the rectangle that is 
+        ///   y-coordinate of the upper-left corner of the rectangle that is
         ///   used to draw the top surface of the pie slice.
         /// </param>
         /// <param name = "widthBoundingRect">
-        ///   Width of the rectangle that is used to draw the top surface of 
+        ///   Width of the rectangle that is used to draw the top surface of
         ///   the pie slice.
         /// </param>
         /// <param name = "heightBoundingRect">
-        ///   Height of the rectangle that is used to draw the top surface of 
+        ///   Height of the rectangle that is used to draw the top surface of
         ///   the pie slice.
         /// </param>
         /// <param name = "sliceHeight">
         ///   Height of the pie slice.
         /// </param>
-        internal void Readjust(float xBoundingRect, float yBoundingRect, float widthBoundingRect,
-                               float heightBoundingRect, float sliceHeight)
+        internal void Readjust(
+            float xBoundingRect, float yBoundingRect, float widthBoundingRect,
+            float heightBoundingRect, float sliceHeight)
         {
             InitializePieSlice(xBoundingRect, yBoundingRect, widthBoundingRect, heightBoundingRect, sliceHeight);
         }
@@ -457,10 +469,7 @@ namespace GitStatistics.PieChart
         /// </param>
         internal void DrawVisibleStartSide(Graphics graphics)
         {
-            if (StartSide != null)
-            {
-                StartSide.Draw(graphics, Pen, BrushStartSide);
-            }
+            StartSide?.Draw(graphics, Pen, BrushStartSide);
         }
 
         /// <summary>
@@ -471,10 +480,7 @@ namespace GitStatistics.PieChart
         /// </param>
         internal void DrawVisibleEndSide(Graphics graphics)
         {
-            if (EndSide != null)
-            {
-                EndSide.Draw(graphics, Pen, BrushEndSide);
-            }
+            EndSide?.Draw(graphics, Pen, BrushEndSide);
         }
 
         /// <summary>
@@ -528,13 +534,25 @@ namespace GitStatistics.PieChart
         {
             var boundingRectangle = new RectangleF(PointStart.X, PointStart.Y, 0, 0);
             if ((StartAngle == 0F) || (StartAngle + SweepAngle >= 360))
+            {
                 GraphicsUtil.IncludePointX(ref boundingRectangle, BoundingRectangle.Right);
-            if ((StartAngle <= 90) && (StartAngle + SweepAngle >= 90) || (StartAngle + SweepAngle >= 450))
+            }
+
+            if (((StartAngle <= 90) && (StartAngle + SweepAngle >= 90)) || (StartAngle + SweepAngle >= 450))
+            {
                 GraphicsUtil.IncludePointY(ref boundingRectangle, BoundingRectangle.Bottom + SliceHeight);
-            if ((StartAngle <= 180) && (StartAngle + SweepAngle >= 180) || (StartAngle + SweepAngle >= 540))
+            }
+
+            if (((StartAngle <= 180) && (StartAngle + SweepAngle >= 180)) || (StartAngle + SweepAngle >= 540))
+            {
                 GraphicsUtil.IncludePointX(ref boundingRectangle, BoundingRectangle.Left);
-            if ((StartAngle <= 270) && (StartAngle + SweepAngle >= 270) || (StartAngle + SweepAngle >= 630))
+            }
+
+            if (((StartAngle <= 270) && (StartAngle + SweepAngle >= 270)) || (StartAngle + SweepAngle >= 630))
+            {
                 GraphicsUtil.IncludePointY(ref boundingRectangle, BoundingRectangle.Top);
+            }
+
             GraphicsUtil.IncludePoint(ref boundingRectangle, Center);
             GraphicsUtil.IncludePoint(ref boundingRectangle, CenterBelow);
             GraphicsUtil.IncludePoint(ref boundingRectangle, PointStart);
@@ -583,8 +601,11 @@ namespace GitStatistics.PieChart
                     point,
                     surfaceBounds.StartPoint,
                     surfaceBounds.EndPoint))
+                {
                     return true;
+                }
             }
+
             return false;
         }
 
@@ -628,9 +649,10 @@ namespace GitStatistics.PieChart
         internal bool BottomSurfaceSectionContainsPoint(PointF point)
         {
             return SliceHeight > 0 &&
-                   PieSliceContainsPoint(point, BoundingRectangle.X, BoundingRectangle.Y + SliceHeight,
-                                         BoundingRectangle.Width, BoundingRectangle.Height, StartAngle,
-                                         SweepAngle);
+                   PieSliceContainsPoint(
+                       point, BoundingRectangle.X, BoundingRectangle.Y + SliceHeight,
+                       BoundingRectangle.Width, BoundingRectangle.Height, StartAngle,
+                       SweepAngle);
         }
 
         /// <summary>
@@ -659,20 +681,26 @@ namespace GitStatistics.PieChart
                 case ShadowStyle.UniformShadow:
                     BrushStartSide =
                         BrushEndSide =
-                        BrushPeripherySurface =
-                        new SolidBrush(
-                            ColorUtil.CreateColorWithCorrectedLightness(
-                                surfaceColor,
-                                -ColorUtil.BrightnessEnhancementFactor1));
+                            BrushPeripherySurface =
+                                new SolidBrush(
+                                    ColorUtil.CreateColorWithCorrectedLightness(
+                                        surfaceColor,
+                                        -ColorUtil.BrightnessEnhancementFactor1));
                     break;
                 case ShadowStyle.GradualShadow:
                     double angle = StartAngle - 180 - ShadowAngle;
                     if (angle < 0)
+                    {
                         angle += 360;
+                    }
+
                     BrushStartSide = CreateBrushForSide(surfaceColor, angle);
                     angle = StartAngle + SweepAngle - ShadowAngle;
                     if (angle < 0)
+                    {
                         angle += 360;
+                    }
+
                     BrushEndSide = CreateBrushForSide(surfaceColor, angle);
                     BrushPeripherySurface = CreateBrushForPeriphery(surfaceColor);
                     break;
@@ -689,16 +717,19 @@ namespace GitStatistics.PieChart
                 BrushSurface.Dispose();
                 BrushSurface = null;
             }
+
             if (BrushStartSide != null)
             {
                 BrushStartSide.Dispose();
                 BrushStartSide = null;
             }
+
             if (BrushEndSide != null)
             {
                 BrushEndSide.Dispose();
                 BrushEndSide = null;
             }
+
             if (BrushPeripherySurface != null)
             {
                 BrushPeripherySurface.Dispose();
@@ -707,7 +738,7 @@ namespace GitStatistics.PieChart
         }
 
         /// <summary>
-        ///   Creates a brush for start and end sides of the pie slice for 
+        ///   Creates a brush for start and end sides of the pie slice for
         ///   gradual  shade.
         /// </summary>
         /// <param name = "color">
@@ -721,16 +752,16 @@ namespace GitStatistics.PieChart
         /// </returns>
         protected virtual Brush CreateBrushForSide(Color color, double angle)
         {
-            var d = 1 - 0.8*Math.Cos(angle*Math.PI/180);
+            var d = 1 - (0.8 * Math.Cos(angle * Math.PI / 180));
             return
                 new SolidBrush(
                     ColorUtil.CreateColorWithCorrectedLightness(
                         color,
-                        -(float) (ColorUtil.BrightnessEnhancementFactor1*d)));
+                        -(float)(ColorUtil.BrightnessEnhancementFactor1 * d)));
         }
 
         /// <summary>
-        ///   Creates a brush for outer periphery of the pie slice used for 
+        ///   Creates a brush for outer periphery of the pie slice used for
         ///   gradual shadow.
         /// </summary>
         /// <param name = "color">
@@ -744,7 +775,7 @@ namespace GitStatistics.PieChart
             var color1 =
                 ColorUtil.CreateColorWithCorrectedLightness(
                     color,
-                    -ColorUtil.BrightnessEnhancementFactor1/2);
+                    -ColorUtil.BrightnessEnhancementFactor1 / 2);
             var color2 =
                 ColorUtil.CreateColorWithCorrectedLightness(
                     color,
@@ -755,14 +786,14 @@ namespace GitStatistics.PieChart
                     Color.Blue,
                     Color.White,
                     LinearGradientMode.Horizontal)
-                    {
-                        InterpolationColors =
-                            new ColorBlend
-                                {
-                                    Colors = new[] {color1, color, color2},
-                                    Positions = new[] {0F, 0.1F, 1.0F}
-                                }
-                    };
+                {
+                    InterpolationColors =
+                        new ColorBlend
+                        {
+                            Colors = new[] { color1, color, color2 },
+                            Positions = new[] { 0F, 0.1F, 1.0F }
+                        }
+                };
         }
 
         /// <summary>
@@ -789,8 +820,9 @@ namespace GitStatistics.PieChart
         /// <param name = "pointEnd">
         ///   Point representing the end of the periphery.
         /// </param>
-        protected void DrawCylinderSurfaceSection(Graphics graphics, Pen pen, Brush brush, float startAngle,
-                                                  float endAngle, PointF pointStart, PointF pointEnd)
+        protected void DrawCylinderSurfaceSection(
+            Graphics graphics, Pen pen, Brush brush, float startAngle,
+            float endAngle, PointF pointStart, PointF pointEnd)
         {
             var path = CreatePathForCylinderSurfaceSection(startAngle, endAngle, pointStart, pointEnd);
             graphics.FillPath(brush, path);
@@ -798,7 +830,7 @@ namespace GitStatistics.PieChart
         }
 
         /// <summary>
-        ///   Transforms actual angle to angle used for rendering. They are 
+        ///   Transforms actual angle to angle used for rendering. They are
         ///   different because of perspective.
         /// </summary>
         /// <param name = "angle">
@@ -809,11 +841,14 @@ namespace GitStatistics.PieChart
         /// </returns>
         protected float TransformAngle(float angle)
         {
-            var x = BoundingRectangle.Width*Math.Cos(angle*Math.PI/180);
-            var y = BoundingRectangle.Height*Math.Sin(angle*Math.PI/180);
-            var result = (float) (Math.Atan2(y, x)*180/Math.PI);
+            var x = BoundingRectangle.Width * Math.Cos(angle * Math.PI / 180);
+            var y = BoundingRectangle.Height * Math.Sin(angle * Math.PI / 180);
+            var result = (float)(Math.Atan2(y, x) * 180 / Math.PI);
             if (result < 0)
+            {
                 return result + 360;
+            }
+
             return result;
         }
 
@@ -833,69 +868,82 @@ namespace GitStatistics.PieChart
         ///   Vertical semi-axis.
         /// </param>
         /// <param name = "angleDegrees">
-        ///   Angle (in degrees) for which corresponding periphery point has to 
+        ///   Angle (in degrees) for which corresponding periphery point has to
         ///   be obtained.
         /// </param>
         /// <returns>
         ///   <c>PointF</c> on the ellipse.
         /// </returns>
-        protected PointF PeripheralPoint(float xCenter, float yCenter, float semiMajor, float semiMinor,
-                                         float angleDegrees)
+        protected PointF PeripheralPoint(
+            float xCenter, float yCenter, float semiMajor, float semiMinor,
+            float angleDegrees)
         {
-            var angleRadians = angleDegrees*Math.PI/180;
-            return new PointF(xCenter + (float) (semiMajor*Math.Cos(angleRadians)),
-                              yCenter + (float) (semiMinor*Math.Sin(angleRadians)));
+            var angleRadians = angleDegrees * Math.PI / 180;
+            return new PointF(
+                xCenter + (float)(semiMajor * Math.Cos(angleRadians)),
+                yCenter + (float)(semiMinor * Math.Sin(angleRadians)));
         }
 
         /// <summary>
-        ///   Initializes pie bounding rectangle, pie height, corners 
+        ///   Initializes pie bounding rectangle, pie height, corners
         ///   coordinates and brushes used for rendering.
         /// </summary>
         /// <param name = "xBoundingRect">
-        ///   x-coordinate of the upper-left corner of the rectangle that is 
+        ///   x-coordinate of the upper-left corner of the rectangle that is
         ///   used to draw the top surface of the pie slice.
         /// </param>
         /// <param name = "yBoundingRect">
-        ///   y-coordinate of the upper-left corner of the rectangle that is 
+        ///   y-coordinate of the upper-left corner of the rectangle that is
         ///   used to draw the top surface of the pie slice.
         /// </param>
         /// <param name = "widthBoundingRect">
-        ///   Width of the rectangle that is used to draw the top surface of 
+        ///   Width of the rectangle that is used to draw the top surface of
         ///   the pie slice.
         /// </param>
         /// <param name = "heightBoundingRect">
-        ///   Height of the rectangle that is used to draw the top surface of 
+        ///   Height of the rectangle that is used to draw the top surface of
         ///   the pie slice.
         /// </param>
         /// <param name = "sliceHeight">
         ///   Height of the pie slice.
         /// </param>
-        private void InitializePieSlice(float xBoundingRect, float yBoundingRect, float widthBoundingRect,
-                                        float heightBoundingRect, float sliceHeight)
+        private void InitializePieSlice(
+            float xBoundingRect, float yBoundingRect, float widthBoundingRect,
+            float heightBoundingRect, float sliceHeight)
         {
             // stores bounding rectangle and pie slice height
             BoundingRectangle =
                 new RectangleF(xBoundingRect, yBoundingRect, widthBoundingRect, heightBoundingRect);
             SliceHeight = sliceHeight;
+
             // recalculates start and sweep angle used for rendering
             StartAngle = TransformAngle(_actualStartAngle);
             SweepAngle = _actualSweepAngle;
-            if (SweepAngle%180 != 0F)
+            if (SweepAngle % 180 != 0F)
+            {
                 SweepAngle = TransformAngle(_actualStartAngle + _actualSweepAngle) - StartAngle;
+            }
+
             if (SweepAngle < 0)
+            {
                 SweepAngle += 360;
+            }
+
             // recreates brushes
             CreateSurfaceBrushes(_surfaceColor, _shadowStyle);
+
             // calculates center and end points on periphery
-            var xCenter = xBoundingRect + widthBoundingRect/2;
-            var yCenter = yBoundingRect + heightBoundingRect/2;
+            var xCenter = xBoundingRect + (widthBoundingRect / 2);
+            var yCenter = yBoundingRect + (heightBoundingRect / 2);
             Center = new PointF(xCenter, yCenter);
             CenterBelow = new PointF(xCenter, yCenter + sliceHeight);
-            PointStart = PeripheralPoint(xCenter, yCenter, widthBoundingRect/2, heightBoundingRect/2,
-                                         _actualStartAngle);
+            PointStart = PeripheralPoint(
+                xCenter, yCenter, widthBoundingRect / 2, heightBoundingRect / 2,
+                _actualStartAngle);
             PointStartBelow = new PointF(PointStart.X, PointStart.Y + sliceHeight);
-            PointEnd = PeripheralPoint(xCenter, yCenter, widthBoundingRect/2, heightBoundingRect/2,
-                                       _actualStartAngle + _actualSweepAngle);
+            PointEnd = PeripheralPoint(
+                xCenter, yCenter, widthBoundingRect / 2, heightBoundingRect / 2,
+                _actualStartAngle + _actualSweepAngle);
             PointEndBelow = new PointF(PointEnd.X, PointEnd.Y + sliceHeight);
             InitializeSides();
         }
@@ -906,16 +954,27 @@ namespace GitStatistics.PieChart
         private void InitializeSides()
         {
             if (StartAngle > 90 && StartAngle < 270)
+            {
                 StartSide =
-                    new Quadrilateral(Center, PointStart, PointStartBelow, CenterBelow,
-                                      SweepAngle != 180);
+                    new Quadrilateral(
+                        Center, PointStart, PointStartBelow, CenterBelow,
+                        SweepAngle != 180);
+            }
             else
+            {
                 StartSide = Quadrilateral.Empty;
+            }
+
             if (EndAngle > 270 || EndAngle < 90)
-                EndSide = new Quadrilateral(Center, PointEnd, PointEndBelow, CenterBelow,
-                                            SweepAngle != 180);
+            {
+                EndSide = new Quadrilateral(
+                    Center, PointEnd, PointEndBelow, CenterBelow,
+                    SweepAngle != 180);
+            }
             else
+            {
                 EndSide = Quadrilateral.Empty;
+            }
         }
 
         /// <summary>
@@ -926,8 +985,9 @@ namespace GitStatistics.PieChart
         /// </returns>
         private IEnumerable<PeripherySurfaceBounds> GetVisiblePeripherySurfaceBounds()
         {
-            var peripherySurfaceBounds = new ArrayList();
-            // outer periphery side is visible only when startAngle or endAngle 
+            var peripherySurfaceBounds = new List<PeripherySurfaceBounds>();
+
+            // outer periphery side is visible only when startAngle or endAngle
             // is between 0 and 180 degrees
             if (!(SweepAngle == 0 || (StartAngle >= 180 && StartAngle + SweepAngle <= 360)))
             {
@@ -945,9 +1005,11 @@ namespace GitStatistics.PieChart
                         x2.X = BoundingRectangle.X;
                         x2.Y = Center.Y;
                     }
+
                     peripherySurfaceBounds.Add(new PeripherySurfaceBounds(fi1, fi2, x1, x2));
                 }
-                // if lateral surface is visible from the right edge 
+
+                // if lateral surface is visible from the right edge
                 if (StartAngle + SweepAngle > 360)
                 {
                     const float fi1 = 0;
@@ -960,14 +1022,16 @@ namespace GitStatistics.PieChart
                         x2.X = BoundingRectangle.Left;
                         x2.Y = Center.Y;
                     }
+
                     peripherySurfaceBounds.Add(new PeripherySurfaceBounds(fi1, fi2, x1, x2));
                 }
             }
-            return (PeripherySurfaceBounds[]) peripherySurfaceBounds.ToArray(typeof (PeripherySurfaceBounds));
+
+            return peripherySurfaceBounds;
         }
 
         /// <summary>
-        ///   Creates <c>GraphicsPath</c> for cylinder surface section. This 
+        ///   Creates <c>GraphicsPath</c> for cylinder surface section. This
         ///   path consists of two arcs and two vertical lines.
         /// </summary>
         /// <param name = "startAngle">
@@ -985,20 +1049,22 @@ namespace GitStatistics.PieChart
         /// <returns>
         ///   <c>GraphicsPath</c> object representing the cylinder surface.
         /// </returns>
-        private GraphicsPath CreatePathForCylinderSurfaceSection(float startAngle, float endAngle,
-                                                                 PointF pointStart, PointF pointEnd)
+        private GraphicsPath CreatePathForCylinderSurfaceSection(
+            float startAngle, float endAngle,
+            PointF pointStart, PointF pointEnd)
         {
             var path = new GraphicsPath();
             path.AddArc(BoundingRectangle, startAngle, endAngle - startAngle);
             path.AddLine(pointEnd.X, pointEnd.Y, pointEnd.X, pointEnd.Y + SliceHeight);
-            path.AddArc(BoundingRectangle.X, BoundingRectangle.Y + SliceHeight, BoundingRectangle.Width,
-                        BoundingRectangle.Height, endAngle, startAngle - endAngle);
+            path.AddArc(
+                BoundingRectangle.X, BoundingRectangle.Y + SliceHeight, BoundingRectangle.Width,
+                BoundingRectangle.Height, endAngle, startAngle - endAngle);
             path.AddLine(pointStart.X, pointStart.Y + SliceHeight, pointStart.X, pointStart.Y);
             return path;
         }
 
         /// <summary>
-        ///   Checks if given point is contained within upper and lower pie 
+        ///   Checks if given point is contained within upper and lower pie
         ///   slice surfaces or within the outer slice brink.
         /// </summary>
         /// <param name = "point">
@@ -1018,15 +1084,17 @@ namespace GitStatistics.PieChart
             if (SliceHeight > 0)
             {
                 return Quadrilateral
-                    .Contains(point,
-                              new[]
-                                  {
-                                      point1,
-                                      new PointF(point1.X, point1.Y + SliceHeight),
-                                      new PointF(point2.X, point2.Y + SliceHeight),
-                                      point2
-                                  });
+                    .Contains(
+                        point,
+                        new[]
+                        {
+                            point1,
+                            new PointF(point1.X, point1.Y + SliceHeight),
+                            new PointF(point2.X, point2.Y + SliceHeight),
+                            point2
+                        });
             }
+
             return false;
         }
 
@@ -1044,7 +1112,7 @@ namespace GitStatistics.PieChart
         ///   y-coordinate of the rectangle that bounds the ellipse from which
         ///   slice is cut.
         /// </param>
-        /// <param name = "widthBoundingRectangle"> 
+        /// <param name = "widthBoundingRectangle">
         ///   Width of the rectangle that bounds the ellipse from which
         ///   slice is cut.
         /// </param>
@@ -1061,33 +1129,40 @@ namespace GitStatistics.PieChart
         /// <returns>
         ///   <c>true</c> if point is contained within the slice.
         /// </returns>
-        private static bool PieSliceContainsPoint(PointF point, float xBoundingRectangle, float yBoundingRectangle,
-                                                  float widthBoundingRectangle, float heightBoundingRectangle,
-                                                  float startAngle,
-                                                  float sweepAngle)
+        private static bool PieSliceContainsPoint(
+            PointF point, float xBoundingRectangle, float yBoundingRectangle,
+            float widthBoundingRectangle, float heightBoundingRectangle,
+            float startAngle,
+            float sweepAngle)
         {
-            double a = widthBoundingRectangle/2;
-            double b = heightBoundingRectangle/2;
+            double a = widthBoundingRectangle / 2;
+            double b = heightBoundingRectangle / 2;
             var x = point.X - xBoundingRectangle - a;
             var y = point.Y - yBoundingRectangle - b;
             var angle = Math.Atan2(y, x);
             if (angle < 0)
-                angle += (2*Math.PI);
-            var angleDegrees = angle*180/Math.PI;
+            {
+                angle += 2 * Math.PI;
+            }
+
+            var angleDegrees = angle * 180 / Math.PI;
+
             // point is inside the pie slice only if between start and end angle
             if ((angleDegrees >= startAngle && angleDegrees <= (startAngle + sweepAngle)) ||
-                (startAngle + sweepAngle > 360) && ((angleDegrees + 360) <= (startAngle + sweepAngle)))
+                ((startAngle + sweepAngle > 360) && ((angleDegrees + 360) <= (startAngle + sweepAngle))))
             {
                 // distance of the point from the ellipse centre
-                var r = Math.Sqrt(y*y + x*x);
-                var a2 = a*a;
-                var b2 = b*b;
+                var r = Math.Sqrt((y * y) + (x * x));
+                var a2 = a * a;
+                var b2 = b * b;
                 var cosFi = Math.Cos(angle);
                 var sinFi = Math.Sin(angle);
+
                 // distance of the ellipse perimeter point
-                var ellipseRadius = (b*a)/Math.Sqrt(b2*cosFi*cosFi + a2*sinFi*sinFi);
+                var ellipseRadius = (b * a) / Math.Sqrt((b2 * cosFi * cosFi) + (a2 * sinFi * sinFi));
                 return ellipseRadius > r;
             }
+
             return false;
         }
 
@@ -1096,7 +1171,7 @@ namespace GitStatistics.PieChart
         /// <summary>
         ///   Internal structure used to store periphery bounds data.
         /// </summary>
-        private struct PeripherySurfaceBounds
+        private readonly struct PeripherySurfaceBounds
         {
             public PeripherySurfaceBounds(float startAngle, float endAngle, PointF startPoint, PointF endPoint)
                 : this()
@@ -1107,13 +1182,13 @@ namespace GitStatistics.PieChart
                 EndPoint = endPoint;
             }
 
-            public float StartAngle { get; private set; }
+            public float StartAngle { get; }
 
-            public float EndAngle { get; private set; }
+            public float EndAngle { get; }
 
-            public PointF StartPoint { get; private set; }
+            public PointF StartPoint { get; }
 
-            public PointF EndPoint { get; private set; }
+            public PointF EndPoint { get; }
         }
 
         #endregion

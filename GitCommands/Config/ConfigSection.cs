@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using GitUIPluginInterfaces;
+using JetBrains.Annotations;
 
 namespace GitCommands.Config
 {
@@ -11,62 +12,74 @@ namespace GitCommands.Config
     ///   [section "subsection"] (subsection is case sensitive)
     ///   or
     ///   [section.subsection] (subsection is case insensitive)
-    ///   
+    ///
     ///   Case insensitive sections are deprecated. Dot separated subsections are treated
     ///   as case insensitive only when loaded from config file. Dot separated subsections
     ///   added from code, are treated as case sensitive.
     /// </summary>
     public class ConfigSection : IConfigSection
     {
-        private readonly IDictionary<string, IList<string>> _configKeys;
-
+        private readonly IDictionary<string, List<string>> _configKeys;
 
         internal ConfigSection(string name, bool forceCaseSensitive)
         {
-            _configKeys = new Dictionary<string, IList<string>>(StringComparer.OrdinalIgnoreCase);
+            _configKeys = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
-            if (name.Contains("\"")) //[section "subsection"] case sensitive
+            var slashIndex = name.IndexOf('\"');
+
+            if (slashIndex != -1)
             {
-                SectionName = name.Substring(0, name.IndexOf('\"')).Trim();
-                SubSection = name.Substring(name.IndexOf('\"') + 1, name.LastIndexOf('\"') - name.IndexOf('\"') - 1);
+                // [section "subsection"] case sensitive
+                SectionName = name.Substring(0, slashIndex).Trim();
+                SubSection = name.Substring(slashIndex + 1, name.LastIndexOf('\"') - slashIndex - 1);
                 SubSectionCaseSensitive = true;
             }
             else if (!name.Contains("."))
             {
-                SectionName = name.Trim(); // [section] case sensitive
+                // [section] case sensitive
+                SectionName = name.Trim();
                 SubSectionCaseSensitive = true;
             }
             else
             {
-                //[section.subsection] case insensitive
+                // [section.subsection] case insensitive
                 var subSectionIndex = name.IndexOf('.');
 
                 if (subSectionIndex < 1)
+                {
                     throw new Exception("Invalid section name: " + name);
+                }
 
                 SectionName = name.Substring(0, subSectionIndex).Trim();
                 SubSection = name.Substring(subSectionIndex + 1).Trim();
                 SubSectionCaseSensitive = false;
             }
+
             if (forceCaseSensitive)
+            {
                 SubSectionCaseSensitive = true;
+            }
         }
 
         public string SectionName { get; set; }
         public string SubSection { get; set; }
         public bool SubSectionCaseSensitive { get; set; }
 
-        public static string FixPath(string path)
+        [NotNull]
+        public static string FixPath([NotNull] string path)
         {
-            if (path.StartsWith("\\\\")) //for using unc paths -> these need to be backward slashes
+            // for using unc paths -> these need to be backward slashes
+            if (path.StartsWith("\\\\"))
+            {
                 return path;
+            }
 
             return path.ToPosixPath();
         }
 
-        public IDictionary<string, IList<string>> AsDictionary()
+        public IDictionary<string, IReadOnlyList<string>> AsDictionary()
         {
-            return _configKeys.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase);
+            return _configKeys.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value, StringComparer.OrdinalIgnoreCase);
         }
 
         public bool HasValue(string key)
@@ -77,9 +90,13 @@ namespace GitCommands.Config
         public void SetValue(string key, string value)
         {
             if (string.IsNullOrEmpty(value))
+            {
                 _configKeys.Remove(key);
+            }
             else
+            {
                 _configKeys[key] = new List<string> { value };
+            }
         }
 
         public void SetPathValue(string setting, string value)
@@ -90,7 +107,9 @@ namespace GitCommands.Config
         public void AddValue(string key, string value)
         {
             if (!_configKeys.ContainsKey(key))
+            {
                 _configKeys[key] = new List<string>();
+            }
 
             _configKeys[key].Add(value);
         }
@@ -102,18 +121,18 @@ namespace GitCommands.Config
 
         public string GetValue(string key, string defaultValue)
         {
-            IList<string> list;
-
-            if (_configKeys.TryGetValue(key, out list))
+            if (_configKeys.TryGetValue(key, out var list))
             {
                 if (list.Count > 0)
-                    return list[list.Count-1];
+                {
+                    return list[list.Count - 1];
+                }
             }
 
             return defaultValue;
         }
 
-        public IList<string> GetValues(string key)
+        public IReadOnlyList<string> GetValues(string key)
         {
             return _configKeys.ContainsKey(key) ? _configKeys[key] : new List<string>();
         }
@@ -127,20 +146,22 @@ namespace GitCommands.Config
                 escSubSection = escSubSection.Replace("\\", "\\\\");
 
                 if (!SubSectionCaseSensitive)
+                {
                     escSubSection = escSubSection.ToLower();
+                }
+
                 result = result + " \"" + escSubSection + "\"";
             }
+
             result = result + "]";
             return result;
         }
 
         public bool Equals(IConfigSection other)
         {
-            StringComparison sc;
-            if (SubSectionCaseSensitive)
-                sc = StringComparison.Ordinal;
-            else
-                sc = StringComparison.OrdinalIgnoreCase;
+            var sc = SubSectionCaseSensitive
+                ? StringComparison.Ordinal
+                : StringComparison.OrdinalIgnoreCase;
 
             return string.Equals(SectionName, other.SectionName, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(SubSection, other.SubSection, sc);

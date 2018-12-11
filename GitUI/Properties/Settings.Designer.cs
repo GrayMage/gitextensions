@@ -12,7 +12,7 @@ namespace GitUI.Properties {
     
     
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "14.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "15.5.0.0")]
     internal sealed partial class Settings : global::System.Configuration.ApplicationSettingsBase {
         
         private static Settings defaultInstance = ((Settings)(global::System.Configuration.ApplicationSettingsBase.Synchronized(new Settings())));
@@ -58,43 +58,7 @@ namespace GitUI.Properties {
                 this["FormBrowse_DiffSplitContainer_SplitterDistance"] = value;
             }
         }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
-        public int Dashboard_MainSplitContainer_SplitterDistance {
-            get {
-                return ((int)(this["Dashboard_MainSplitContainer_SplitterDistance"]));
-            }
-            set {
-                this["Dashboard_MainSplitContainer_SplitterDistance"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
-        public int Dashboard_CommonSplitContainer_SplitterDistance {
-            get {
-                return ((int)(this["Dashboard_CommonSplitContainer_SplitterDistance"]));
-            }
-            set {
-                this["Dashboard_CommonSplitContainer_SplitterDistance"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("96")]
-        public int Dashboard_DeviceDpi {
-            get {
-                return ((int)(this["Dashboard_DeviceDpi"]));
-            }
-            set {
-                this["Dashboard_DeviceDpi"] = value;
-            }
-        }
-        
+                
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("96")]
@@ -109,13 +73,25 @@ namespace GitUI.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("213")]
         public int FormBrowse_MainSplitContainer_SplitterDistance {
             get {
                 return ((int)(this["FormBrowse_MainSplitContainer_SplitterDistance"]));
             }
             set {
                 this["FormBrowse_MainSplitContainer_SplitterDistance"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool FormBrowse_BranchTreePanel_Collapsed {
+            get {
+                return ((bool)(this["FormBrowse_BranchTreePanel_Collapsed"]));
+            }
+            set {
+                this["FormBrowse_BranchTreePanel_Collapsed"] = value;
             }
         }
         

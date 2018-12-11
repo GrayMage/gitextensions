@@ -1,8 +1,12 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using GitUI.HelperDialogs;
+using GitUIPluginInterfaces;
+using JetBrains.Annotations;
+using Microsoft.VisualStudio.Threading;
 
 namespace GitUI.UserControls
 {
@@ -11,52 +15,60 @@ namespace GitUI.UserControls
         public CommitPickerSmallControl()
         {
             InitializeComponent();
-            Translate();
+            InitializeComplete();
         }
 
-        ////public event EventHandler<EventArgs> OnCommitSelected;
-
-        private string _selectedCommitHash;
+        [CanBeNull]
         [Browsable(false)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string SelectedCommitHash
-        {
-            get { return _selectedCommitHash; }
-        }
+        public ObjectId SelectedObjectId { get; private set; }
 
         /// <summary>
         /// shows a message box if commitHash is invalid
         /// </summary>
-        /// <param name="commitHash"></param>
         public void SetSelectedCommitHash(string commitHash)
         {
-            string oldCommitHash = _selectedCommitHash;
+            var oldCommitHash = SelectedObjectId;
 
-            _selectedCommitHash = Module.RevParse(commitHash);
+            SelectedObjectId = Module.RevParse(commitHash);
 
-            if (_selectedCommitHash.IsNullOrEmpty() && !commitHash.IsNullOrWhiteSpace())
+            if (SelectedObjectId == null && !commitHash.IsNullOrWhiteSpace())
             {
-                _selectedCommitHash = oldCommitHash;
+                SelectedObjectId = oldCommitHash;
                 MessageBox.Show("The given commit hash is not valid for this repository and was therefore discarded.");
             }
 
-            var isArtificialCommitForEmptyRepo = _selectedCommitHash == "HEAD";
-            if (_selectedCommitHash.IsNullOrEmpty() || isArtificialCommitForEmptyRepo)
+            var isArtificialCommitForEmptyRepo = commitHash == "HEAD";
+
+            if (SelectedObjectId == null || isArtificialCommitForEmptyRepo)
             {
                 textBoxCommitHash.Text = "";
                 lbCommits.Text = "";
             }
             else
             {
-                textBoxCommitHash.Text = _selectedCommitHash.Substring(0, 10);
-                Task.Factory.StartNew(() => this.Module.GetCommitCountString(this.Module.GetCurrentCheckout(), _selectedCommitHash))
-                     .ContinueWith(t => lbCommits.Text = t.Result, TaskScheduler.FromCurrentSynchronizationContext());
+                textBoxCommitHash.Text = SelectedObjectId.ToShortString();
+                ThreadHelper.JoinableTaskFactory.RunAsync(
+                    async () =>
+                    {
+                        await TaskScheduler.Default.SwitchTo(alwaysYield: true);
+
+                        var currentCheckout = Module.GetCurrentCheckout();
+
+                        Debug.Assert(currentCheckout != null, "currentCheckout != null");
+
+                        var text = Module.GetCommitCountString(currentCheckout.ToString(), SelectedObjectId.ToString());
+
+                        await this.SwitchToMainThreadAsync();
+
+                        lbCommits.Text = text;
+                    });
             }
         }
 
         private void buttonPickCommit_Click(object sender, EventArgs e)
         {
-            using (var chooseForm = new FormChooseCommit(UICommands, SelectedCommitHash))
+            using (var chooseForm = new FormChooseCommit(UICommands, SelectedObjectId?.ToString()))
             {
                 if (chooseForm.ShowDialog(this) == DialogResult.OK && chooseForm.SelectedRevision != null)
                 {

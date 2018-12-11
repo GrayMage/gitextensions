@@ -15,7 +15,6 @@ namespace GitCommandsTests
         private IGitModule _module;
         private GitRevisionInfoProvider _provider;
 
-
         [SetUp]
         public void Setup()
         {
@@ -26,7 +25,7 @@ namespace GitCommandsTests
         [Test]
         public void LoadChildren_should_throw_if_null()
         {
-            ((Action)(() => _provider.LoadChildren(null))).ShouldThrow<ArgumentNullException>();
+            ((Action)(() => _provider.LoadChildren(null))).Should().Throw<ArgumentNullException>();
         }
 
         [TestCase(null)]
@@ -37,52 +36,53 @@ namespace GitCommandsTests
             var item = Substitute.For<IGitItem>();
             item.Guid.Returns(guid);
 
-            ((Action)(() => _provider.LoadChildren(item))).ShouldThrow<ArgumentException>();
+            ((Action)(() => _provider.LoadChildren(item))).Should().Throw<ArgumentException>();
         }
 
         [Test]
         public void LoadChildren_should_return_if_gitmodule_not_supplied()
         {
-            var guid = Guid.NewGuid().ToString("N");
+            var objectId = ObjectId.Random().ToString();
             var item = Substitute.For<IGitItem>();
-            item.Guid.Returns(guid);
+            item.Guid.Returns(objectId);
 
             _provider = new GitRevisionInfoProvider(() => null);
 
-            ((Action)(() => _provider.LoadChildren(item))).ShouldThrow<ArgumentException>();
+            ((Action)(() => _provider.LoadChildren(item))).Should().Throw<ArgumentException>();
         }
 
         [Test]
         public void LoadChildren_should_return_shallow_tree_for_non_GitItem()
         {
-            var guid = Guid.NewGuid().ToString("N");
+            var objectId = ObjectId.Random();
             var item = Substitute.For<IGitItem>();
-            item.Guid.Returns(guid);
+            item.ObjectId.Returns(objectId);
+            item.Guid.Returns(objectId.ToString());
 
             var items = new[] { Substitute.For<IGitItem>(), Substitute.For<IGitItem>(), Substitute.For<IGitItem>() };
-            _module.GetTree(guid, false).Returns(items);
+            _module.GetTree(objectId, full: false).Returns(items);
 
             var children = _provider.LoadChildren(item);
 
             children.Should().BeEquivalentTo(items);
-            _module.Received(1).GetTree(guid, false);
+            _module.Received(1).GetTree(objectId, false);
         }
 
         [Test]
         public void LoadChildren_should_return_shallow_tree_for_GitItem_with_updated_FileName()
         {
-            var guid = Guid.NewGuid().ToString("N");
-            var item = new GitItem("", "", guid, "folder");
+            var commitId = ObjectId.Random();
+            var item = new GitItem(0, GitObjectType.Tree, commitId, "folder");
 
-            var items = new[] { Substitute.For<IGitItem>(), new GitItem("", "", "", "file2"), new GitItem("", "", "", "file3") };
-            _module.GetTree(guid, false).Returns(items);
+            var items = new[] { Substitute.For<IGitItem>(), new GitItem(0, GitObjectType.Blob, ObjectId.Random(), "file2"), new GitItem(0, GitObjectType.Blob, ObjectId.Random(), "file3") };
+            _module.GetTree(commitId, false).Returns(items);
 
             var children = _provider.LoadChildren(item);
 
             children.Should().BeEquivalentTo(items);
             ((GitItem)items[1]).FileName.Should().Be(Path.Combine(item.FileName, "file2"));
             ((GitItem)items[2]).FileName.Should().Be(Path.Combine(item.FileName, "file3"));
-            _module.Received(1).GetTree(guid, false);
+            _module.Received(1).GetTree(commitId, false);
         }
     }
 }

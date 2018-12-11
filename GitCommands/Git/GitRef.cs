@@ -1,145 +1,182 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using GitCommands.Config;
 using GitUIPluginInterfaces;
+using JetBrains.Annotations;
 
 namespace GitCommands
 {
-    public class GitRef : IGitRef
+    internal enum GitRefType
+    {
+        Other,
+        Head,
+        Remote,
+        Tag,
+        Bisect,
+        BisectGood,
+        BisectBad,
+        Stash
+    }
+
+    public sealed class GitRef : IGitRef
     {
         private readonly string _mergeSettingName;
         private readonly string _remoteSettingName;
-       
-        /// <summary>"refs/tags/"</summary>
-        public static readonly string RefsTagsPrefix = "refs/tags/";
-        /// <summary>"refs/heads/"</summary>
-        public static readonly string RefsHeadsPrefix = "refs/heads/";
-        /// <summary>"refs/remotes/"</summary>
-        public static readonly string RefsRemotesPrefix = "refs/remotes/";
-        /// <summary>"refs/bisect/"</summary>
-        public static readonly string RefsBisectPrefix = "refs/bisect/";
-        /// <summary>"^{}"</summary>
-        public static readonly string TagDereferenceSuffix = "^{}";
-       
-        public IGitModule Module { get; private set; }
+        private readonly GitRefType _type;
 
-        public GitRef(IGitModule module, string guid, string completeName)
-            : this(module, guid, completeName, string.Empty) { }
+        public IGitModule Module { get; }
 
-        public GitRef(IGitModule module, string guid, string completeName, string remote)
+        public GitRef(IGitModule module, [CanBeNull] ObjectId objectId, string completeName, string remote = "")
         {
             Module = module;
-            Guid = guid;
-            Selected = false;
+            ObjectId = objectId;
+            Guid = objectId?.ToString();
             CompleteName = completeName;
             Remote = remote;
-            IsTag = CompleteName.StartsWith(RefsTagsPrefix);
-            IsDereference = CompleteName.EndsWith(TagDereferenceSuffix);
-            IsHead = CompleteName.StartsWith(RefsHeadsPrefix);
-            IsRemote = CompleteName.StartsWith(RefsRemotesPrefix);
-            IsBisect = CompleteName.StartsWith(RefsBisectPrefix);
 
-            ParseName();
+            IsDereference = CompleteName.EndsWith(GitRefName.TagDereferenceSuffix);
 
-            _remoteSettingName = RemoteSettingName(Name);
-            _mergeSettingName = String.Format("branch.{0}.merge", Name);
+            _type = GetType();
+
+            var name = ParseName();
+
+            Name = name.IsNullOrWhiteSpace() ? CompleteName : name;
+
+            _remoteSettingName = $"branch.{Name}.remote";
+            _mergeSettingName = $"branch.{Name}.merge";
+
+            return;
+
+            GitRefType GetType()
+            {
+                if (CompleteName.StartsWith(GitRefName.RefsTagsPrefix))
+                {
+                    return GitRefType.Tag;
+                }
+
+                if (CompleteName.StartsWith(GitRefName.RefsHeadsPrefix))
+                {
+                    return GitRefType.Head;
+                }
+
+                if (CompleteName.StartsWith(GitRefName.RefsRemotesPrefix))
+                {
+                    return GitRefType.Remote;
+                }
+
+                if (CompleteName.StartsWith(GitRefName.RefsBisectPrefix))
+                {
+                    if (CompleteName.StartsWith(GitRefName.RefsBisectGoodPrefix))
+                    {
+                        return GitRefType.BisectGood;
+                    }
+
+                    if (CompleteName.StartsWith(GitRefName.RefsBisectBadPrefix))
+                    {
+                        return GitRefType.BisectBad;
+                    }
+
+                    return GitRefType.Bisect;
+                }
+
+                if (CompleteName.StartsWith(GitRefName.RefsStashPrefix))
+                {
+                    return GitRefType.Stash;
+                }
+
+                return GitRefType.Other;
+            }
+
+            string ParseName()
+            {
+                if (IsRemote)
+                {
+                    return CompleteName.SubstringAfterLast("remotes/");
+                }
+
+                if (IsTag)
+                {
+                    // we need the one containing ^{}, because it contains the reference
+                    return CompleteName.RemoveSuffix(GitRefName.TagDereferenceSuffix).SubstringAfterLast("tags/");
+                }
+
+                if (IsHead)
+                {
+                    return CompleteName.SubstringAfterLast("heads/");
+                }
+
+                // if we don't know ref type then we don't know if '/' is a valid ref character
+                return CompleteName.SubstringAfter("refs/");
+            }
         }
 
-        public static GitRef CreateBranchRef(GitModule module, string guid, string name)
-        {
-            return new GitRef(module, guid, RefsHeadsPrefix + name);
-        }
+        public string CompleteName { get; }
+        public bool IsSelected { get; set; } = false;
+        public bool IsSelectedHeadMergeSource { get; set; }
 
-        public string CompleteName { get; private set; }
-        public bool Selected { get; set; }
-        public bool SelectedHeadMergeSource { get; set; }
-        public bool IsTag { get; private set; }
-        public bool IsHead { get; private set; }
-        public bool IsRemote { get; private set; }
-        public bool IsBisect { get; private set; }
+        public bool IsTag => _type == GitRefType.Tag;
+        public bool IsHead => _type == GitRefType.Head;
+        public bool IsRemote => _type == GitRefType.Remote;
+        public bool IsBisect => _type == GitRefType.Bisect;
+        public bool IsBisectGood => _type == GitRefType.BisectGood;
+        public bool IsBisectBad => _type == GitRefType.BisectBad;
+        public bool IsStash => _type == GitRefType.Stash;
 
-        /// <summary>
-        /// True when Guid is a checksum of an object (e.g. commit) to which another object 
-        /// with Name (e.g. annotated tag) is applied. 
-        /// <para>False when Name and Guid are denoting the same object.</para>
-        /// </summary>
-        public bool IsDereference { get; private set; }
+        public bool IsDereference { get; }
 
-        public bool IsOther
-        {
-            get { return !IsHead && !IsRemote && !IsTag; }
-        }
+        public string LocalName => IsRemote ? Name.Substring(Remote.Length + 1) : Name;
 
-        public string LocalName
-        {
-            get { return IsRemote ? Name.Substring(Remote.Length + 1) : Name; }
-        }
-
-        public string Remote { get; private set; }
+        public string Remote { get; }
 
         public string TrackingRemote
         {
-            get
-            {
-                return GetTrackingRemote(Module.LocalConfigFile);
-            }
+            get => GetTrackingRemote(Module.LocalConfigFile);
             set
             {
-                if (String.IsNullOrEmpty(value))
+                if (string.IsNullOrEmpty(value))
+                {
                     Module.UnsetSetting(_remoteSettingName);
+                }
                 else
                 {
                     Module.SetSetting(_remoteSettingName, value);
 
                     if (MergeWith == "")
+                    {
                         MergeWith = Name;
+                    }
                 }
             }
         }
 
-        /// <summary>Gets the setting name for a branch's remote.</summary>
-        public static string RemoteSettingName(string branch)
-        {
-            return String.Format(SettingKeyString.BranchRemote, branch);
-        }
-
-        /// <summary>
-        /// This method is a faster than the property above. The property reads the config file
-        /// every time it is accessed. This method accepts a config file what makes it faster when loading
-        /// the revision graph.
-        /// </summary>
+        /// <inheritdoc />
         public string GetTrackingRemote(ISettingsValueGetter configFile)
         {
             return configFile.GetValue(_remoteSettingName);
         }
 
+        /// <inheritdoc />
         public string MergeWith
         {
-            get
-            {
-                return GetMergeWith(Module.LocalConfigFile);
-            }
+            get => GetMergeWith(Module.LocalConfigFile);
             set
             {
-                if (String.IsNullOrEmpty(value))
+                if (string.IsNullOrEmpty(value))
+                {
                     Module.UnsetSetting(_mergeSettingName);
+                }
                 else
-                    Module.SetSetting(_mergeSettingName, GitCommandHelpers.GetFullBranchName(value));
+                {
+                    Module.SetSetting(_mergeSettingName, GitRefName.GetFullBranchName(value));
+                }
             }
         }
 
-        /// <summary>
-        /// This method is a faster than the property above. The property reads the config file
-        /// every time it is accessed. This method accepts a configfile what makes it faster when loading
-        /// the revisiongraph.
-        /// </summary>
+        /// <inheritdoc />
         public string GetMergeWith(ISettingsValueGetter configFile)
         {
-            string merge = configFile.GetValue(_mergeSettingName);
-            return merge.StartsWith(RefsHeadsPrefix) ? merge.Substring(11) : merge;
+            return configFile.GetValue(_mergeSettingName).RemovePrefix(GitRefName.RefsHeadsPrefix);
         }
-
 
         public static GitRef NoHead(GitModule module)
         {
@@ -148,54 +185,22 @@ namespace GitCommands
 
         #region IGitItem Members
 
-        public string Guid { get; private set; }
-        public string Name { get; private set; }
+        [CanBeNull]
+        public ObjectId ObjectId { get; }
+        [CanBeNull]
+        public string Guid { get; }
+        public string Name { get; }
 
         #endregion
 
-        public override string ToString()
+        public override string ToString() => CompleteName;
+
+        public static IReadOnlyCollection<string> GetAmbiguousRefNames(IEnumerable<IGitRef> refs)
         {
-            return CompleteName;
-        }
-
-        private void ParseName()
-        {
-            if (IsRemote)
-            {
-                Name = CompleteName.Substring(CompleteName.LastIndexOf("remotes/") + 8);
-            }
-            else if (IsTag)
-            {
-                // we need the one containing ^{}, because it contains the reference
-                var temp =
-                    CompleteName.Contains(TagDereferenceSuffix)
-                        ? CompleteName.Substring(0, CompleteName.Length - TagDereferenceSuffix.Length)
-                        : CompleteName;
-
-                Name = temp.Substring(CompleteName.LastIndexOf("tags/") + 5);
-            }
-            else if (IsHead)
-            {
-                Name = CompleteName.Substring(CompleteName.LastIndexOf("heads/") + 6);
-            }
-            else
-            {
-                //if we don't know ref type then we don't know if '/' is a valid ref character
-                Name = CompleteName.SkipStr("refs/");
-            }
-
-            if (Name.IsNullOrWhiteSpace())
-            {
-                Name = CompleteName;
-            }
-        }
-
-        public static ISet<string> GetAmbiguousRefNames(IEnumerable<IGitRef> refs)
-        {
-            return refs.
-                GroupBy(r => r.Name).
-                Where(group => group.Count() > 1).
-                ToHashSet(e => e.Key);
+            return refs
+                .GroupBy(r => r.Name)
+                .Where(group => group.Count() > 1)
+                .ToHashSet(e => e.Key);
         }
     }
 }

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Xml.Serialization;
 
 namespace ResourceManager.Xliff
@@ -19,8 +18,8 @@ namespace ResourceManager.Xliff
             : this()
         {
             GitExVersion = gitExVersion;
-            _sourceLanguage = sourceLanguage;
-            _targetLanguage = targetLanguage;
+            SourceLanguage = sourceLanguage;
+            TargetLanguage = targetLanguage;
         }
 
         [XmlAttribute("version")]
@@ -29,21 +28,11 @@ namespace ResourceManager.Xliff
         [XmlAttribute("GitExVersion")]
         public string GitExVersion { get; set; }
 
-        private string _sourceLanguage;
-        [XmlIgnore()]
-        public string SourceLanguage
-        {
-            get { return _sourceLanguage; }
-            set { _sourceLanguage = value; }
-        }
+        [XmlIgnore]
+        public string SourceLanguage { get; set; }
 
-        private string _targetLanguage;
-        [XmlIgnore()]
-        public string TargetLanguage
-        {
-            get { return _targetLanguage; }
-            set { _targetLanguage = value; }
-        }
+        [XmlIgnore]
+        public string TargetLanguage { get; set; }
 
         [XmlElement(ElementName = "file")]
         public List<TranslationCategory> TranslationCategories { get; set; }
@@ -56,13 +45,16 @@ namespace ResourceManager.Xliff
                 tc = new TranslationCategory(translationCategory, SourceLanguage, TargetLanguage);
                 AddTranslationCategory(tc);
             }
+
             return tc;
         }
 
         public void AddTranslationCategory(TranslationCategory translationCategory)
         {
             if (string.IsNullOrEmpty(translationCategory.Name))
+            {
                 throw new InvalidOperationException("Cannot add translationCategory without name");
+            }
 
             TranslationCategories.Add(translationCategory);
         }
@@ -75,8 +67,10 @@ namespace ResourceManager.Xliff
         public void Sort()
         {
             TranslationCategories.Sort();
-            foreach(TranslationCategory tc in TranslationCategories)
+            foreach (TranslationCategory tc in TranslationCategories)
+            {
                 tc.Body.TranslationItems.Sort();
+            }
         }
 
         public void AddTranslationItem(string category, string item, string property, string neutralValue)
@@ -92,17 +86,19 @@ namespace ResourceManager.Xliff
 
             if (ti == null)
             {
-                //if an item is not translated, then store its default value
-                //to be able to retrieve it later (eg. when to a caption
-                //is added an additional information like 'Commit (<number of changes>)',
-                //and then the caption needs to be refreshed)
+                // if an item is not translated, then store its default value
+                // to be able to retrieve it later (eg. when to a caption
+                // is added an additional information like 'Commit (<number of changes>)',
+                // and then the caption needs to be refreshed)
                 string defaultValue = provideDefaultValue();
                 tc.Body.AddTranslationItemIfNotExist(new TranslationItem(item, property, defaultValue));
                 return defaultValue;
             }
 
             if (string.IsNullOrEmpty(ti.Value))
+            {
                 return ti.Source;
+            }
 
             return ti.Value;
         }

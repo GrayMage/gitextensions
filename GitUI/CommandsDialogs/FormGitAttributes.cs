@@ -9,7 +9,7 @@ namespace GitUI.CommandsDialogs
 {
     public partial class FormGitAttributes : GitModuleForm
     {
-        private readonly TranslationString noWorkingDir = 
+        private readonly TranslationString _noWorkingDir =
             new TranslationString(".gitattributes is only supported when there is a working directory.");
         private readonly TranslationString _noWorkingDirCaption =
             new TranslationString("No working directory");
@@ -25,12 +25,20 @@ namespace GitUI.CommandsDialogs
             new TranslationString("Save changes?");
 
         public string GitAttributesFile = string.Empty;
+        private readonly IFullPathResolver _fullPathResolver;
 
-        public FormGitAttributes(GitUICommands aCommands)
-            : base(aCommands)
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
+        private FormGitAttributes()
         {
             InitializeComponent();
-            Translate();
+        }
+
+        public FormGitAttributes(GitUICommands commands)
+            : base(commands)
+        {
+            InitializeComponent();
+            InitializeComplete();
+            _fullPathResolver = new FullPathResolver(() => Module.WorkingDir);
         }
 
         protected override void OnRuntimeLoad(EventArgs e)
@@ -44,9 +52,10 @@ namespace GitUI.CommandsDialogs
         {
             try
             {
-                if (File.Exists(Module.WorkingDir + ".gitattributes"))
+                var path = _fullPathResolver.Resolve(".gitattributes");
+                if (File.Exists(path))
                 {
-                    _NO_TRANSLATE_GitAttributesText.ViewFile(Module.WorkingDir + ".gitattributes");
+                    _NO_TRANSLATE_GitAttributesText.ViewFileAsync(path);
                 }
             }
             catch (Exception ex)
@@ -67,13 +76,16 @@ namespace GitUI.CommandsDialogs
             {
                 FileInfoExtensions
                     .MakeFileTemporaryWritable(
-                        Module.WorkingDir + ".gitattributes",
+                        _fullPathResolver.Resolve(".gitattributes"),
                         x =>
                         {
-                            this.GitAttributesFile = _NO_TRANSLATE_GitAttributesText.GetText();
-                            if (!this.GitAttributesFile.EndsWith(Environment.NewLine))
-                                this.GitAttributesFile += Environment.NewLine;
-                            File.WriteAllBytes(x, GitModule.SystemEncoding.GetBytes(this.GitAttributesFile));
+                            GitAttributesFile = _NO_TRANSLATE_GitAttributesText.GetText();
+                            if (!GitAttributesFile.EndsWith(Environment.NewLine))
+                            {
+                                GitAttributesFile += Environment.NewLine;
+                            }
+
+                            File.WriteAllBytes(x, GitModule.SystemEncoding.GetBytes(GitAttributesFile));
                         });
 
                 return true;
@@ -96,26 +108,35 @@ namespace GitUI.CommandsDialogs
                 {
                     case DialogResult.Yes:
                         if (SaveFile())
+                        {
                             needToClose = true;
+                        }
+
                         break;
                     case DialogResult.No:
                         needToClose = true;
                         break;
-                    default:
-                        break;
                 }
             }
             else
+            {
                 needToClose = true;
+            }
 
             if (!needToClose)
+            {
                 e.Cancel = true;
+            }
         }
 
         private void FormGitAttributesLoad(object sender, EventArgs e)
         {
-            if (!Module.IsBareRepository()) return;
-            MessageBox.Show(this, noWorkingDir.Text, _noWorkingDirCaption.Text);
+            if (!Module.IsBareRepository())
+            {
+                return;
+            }
+
+            MessageBox.Show(this, _noWorkingDir.Text, _noWorkingDirCaption.Text);
             Close();
         }
 
@@ -126,8 +147,7 @@ namespace GitUI.CommandsDialogs
 
         private void GitAttributesFileLoaded(object sender, EventArgs e)
         {
-            GitAttributesFile = _NO_TRANSLATE_GitAttributesText.GetText();           
+            GitAttributesFile = _NO_TRANSLATE_GitAttributesText.GetText();
         }
     }
 }
-

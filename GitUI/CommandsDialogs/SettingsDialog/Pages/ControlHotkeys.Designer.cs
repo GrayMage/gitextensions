@@ -32,7 +32,7 @@
             this.bApply = new System.Windows.Forms.Button();
             this.bClear = new System.Windows.Forms.Button();
             this.lHotkeyableItems = new System.Windows.Forms.Label();
-            this.listMappings = new System.Windows.Forms.ListView();
+            this.listMappings = new UserControls.NativeListView();
             this.columnCommand = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.columnKey = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.bResetToDefaults = new System.Windows.Forms.Button();
@@ -126,7 +126,6 @@
             // 
             this.cmbSettings.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left)));
-            this.cmbSettings.DisplayMember = "Name";
             this.cmbSettings.FormattingEnabled = true;
             this.cmbSettings.IntegralHeight = false;
             this.cmbSettings.ItemHeight = 15;
@@ -174,7 +173,7 @@
     private System.Windows.Forms.Button bApply;
     private System.Windows.Forms.Button bClear;
     private System.Windows.Forms.Label lHotkeyableItems;
-    private System.Windows.Forms.ListView listMappings;
+    private UserControls.NativeListView listMappings;
     private System.Windows.Forms.ColumnHeader columnCommand;
     private System.Windows.Forms.ColumnHeader columnKey;
     private System.Windows.Forms.Button bResetToDefaults;

@@ -30,7 +30,7 @@
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormRunScriptSpecify));
             this.specifyLabel = new System.Windows.Forms.Label();
-            this.branchesListView = new System.Windows.Forms.ListView();
+            this.branchesListView = new UserControls.NativeListView();
             this.button1 = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
@@ -72,7 +72,6 @@
             this.Controls.Add(this.button1);
             this.Controls.Add(this.branchesListView);
             this.Controls.Add(this.specifyLabel);
-            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "FormRunScriptSpecify";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
             this.Text = "Specify branch";
@@ -84,7 +83,7 @@
         #endregion
 
         private System.Windows.Forms.Label specifyLabel;
-        private System.Windows.Forms.ListView branchesListView;
+        private UserControls.NativeListView branchesListView;
         private System.Windows.Forms.Button button1;
     }
 }

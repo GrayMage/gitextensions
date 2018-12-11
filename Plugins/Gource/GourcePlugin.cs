@@ -1,16 +1,19 @@
-﻿using GitUIPluginInterfaces;
-using ICSharpCode.SharpZipLib.Zip;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.Composition;
 using System.IO;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using GitUIPluginInterfaces;
+using Gource.Properties;
+using ICSharpCode.SharpZipLib.Zip;
 using ResourceManager;
 
 namespace Gource
 {
+    [Export(typeof(IGitPlugin))]
     public class GourcePlugin : GitPluginBase, IGitPluginForRepository
     {
         #region Translation
@@ -34,58 +37,58 @@ namespace Gource
         {
             SetNameAndDescription("Gource");
             Translate();
+            Icon = Resources.IconGource;
         }
 
-        private StringSetting GourcePath = new StringSetting("Path to Gource", "");
-        private StringSetting GourceArguments = new StringSetting("Arguments", "--hide filenames --user-image-dir \"$(AVATARS)\"");
+        private readonly StringSetting _gourcePath = new StringSetting("Path to Gource", "");
+        private readonly StringSetting _gourceArguments = new StringSetting("Arguments", "--hide filenames --user-image-dir \"$(AVATARS)\"");
 
         #region IGitPlugin Members
 
         public override IEnumerable<ISetting> GetSettings()
         {
-            //return all settings or introduce implementation based on reflection on GitPluginBase level
-            yield return GourcePath;
-            yield return GourceArguments;
+            // return all settings or introduce implementation based on reflection on GitPluginBase level
+            yield return _gourcePath;
+            yield return _gourceArguments;
         }
 
-        public override bool Execute(GitUIBaseEventArgs eventArgs)
+        public override bool Execute(GitUIEventArgs args)
         {
-            IGitModule gitUiCommands = eventArgs.GitModule;
-            var ownerForm = eventArgs.OwnerForm as IWin32Window;
-            if (!gitUiCommands.IsValidGitWorkingDir())
+            if (!args.GitModule.IsValidGitWorkingDir())
             {
-                MessageBox.Show(ownerForm, _currentDirectoryIsNotValidGit.Text);
+                MessageBox.Show(args.OwnerForm, _currentDirectoryIsNotValidGit.Text);
                 return false;
             }
 
-            var pathToGource = GourcePath.ValueOrDefault(Settings);
+            var pathToGource = _gourcePath.ValueOrDefault(Settings);
 
-            if (!string.IsNullOrEmpty(pathToGource))
+            if (!File.Exists(pathToGource))
             {
-                if (!File.Exists(pathToGource))
+                var result = MessageBox.Show(
+                    args.OwnerForm,
+                    string.Format(_resetConfigPath.Text, pathToGource), _gource.Text, MessageBoxButtons.YesNo);
+
+                if (result == DialogResult.Yes)
                 {
-                    if (MessageBox.Show(ownerForm,
-                            string.Format(_resetConfigPath.Text, pathToGource), _gource.Text, MessageBoxButtons.YesNo) ==
-                        DialogResult.Yes)
-                    {
-                        Settings.SetValue<string>(GourcePath.Name, GourcePath.DefaultValue, s => s);
-                        pathToGource = GourcePath.DefaultValue;
-                    }
+                    Settings.SetValue(_gourcePath.Name, _gourcePath.DefaultValue, s => s);
+                    pathToGource = _gourcePath.DefaultValue;
                 }
             }
 
             if (string.IsNullOrEmpty(pathToGource))
             {
-                if (MessageBox.Show(ownerForm, _doYouWantDownloadGource.Text, _download.Text,
-                    MessageBoxButtons.YesNo) == DialogResult.Yes)
+                if (MessageBox.Show(
+                        args.OwnerForm, _doYouWantDownloadGource.Text, _download.Text,
+                        MessageBoxButtons.YesNo) == DialogResult.Yes)
                 {
                     var gourceUrl = SearchForGourceUrl();
 
                     if (string.IsNullOrEmpty(gourceUrl))
                     {
-                        MessageBox.Show(ownerForm, _cannotFindGource.Text);
+                        MessageBox.Show(args.OwnerForm, _cannotFindGource.Text);
                         return false;
                     }
+
                     var downloadDir = Path.GetTempPath();
                     var fileName = Path.Combine(downloadDir, "gource.zip");
                     var downloadSize = DownloadFile(gourceUrl, fileName);
@@ -98,71 +101,75 @@ namespace Gource
                         var newGourcePath = Path.Combine(downloadDir, "gource\\gource.exe");
                         if (File.Exists(newGourcePath))
                         {
-                            MessageBox.Show(ownerForm, _gourceDownloadedAndUnzipped.Text);
+                            MessageBox.Show(args.OwnerForm, _gourceDownloadedAndUnzipped.Text);
                             pathToGource = newGourcePath;
                         }
                     }
                     else
                     {
-                        MessageBox.Show(ownerForm, _downloadingFailed.Text);
+                        MessageBox.Show(args.OwnerForm, _downloadingFailed.Text);
                     }
                 }
             }
 
-            using (var gourceStart = new GourceStart(pathToGource, eventArgs, GourceArguments.ValueOrDefault(Settings)))
+            using (var gourceStart = new GourceStart(pathToGource, args, _gourceArguments.ValueOrDefault(Settings)))
             {
-                gourceStart.ShowDialog(ownerForm);
-                Settings.SetValue<string>(GourceArguments.Name, gourceStart.GourceArguments, s => s);
-                Settings.SetValue<string>(GourcePath.Name, gourceStart.PathToGource, s => s);
+                gourceStart.ShowDialog(args.OwnerForm);
+                Settings.SetValue(_gourceArguments.Name, gourceStart.GourceArguments, s => s);
+                Settings.SetValue(_gourcePath.Name, gourceStart.PathToGource, s => s);
             }
+
             return true;
         }
 
-        #endregion IGitPlugin Members
+        #endregion
 
-        public static void UnZipFiles(string zipPathAndFile, string outputFolder, bool deleteZipFile)
+        private static void UnZipFiles(string zipPathAndFile, string outputFolder, bool deleteZipFile)
         {
             try
             {
-                var s = new ZipInputStream(File.OpenRead(zipPathAndFile));
-
-                ZipEntry theEntry;
-                while ((theEntry = s.GetNextEntry()) != null)
+                if (outputFolder != "")
                 {
-                    var directoryName = outputFolder;
-                    var fileName = Path.GetFileName(theEntry.Name);
-                    // create directory
-                    if (directoryName != "")
-                    {
-                        Directory.CreateDirectory(directoryName);
-                    }
-                    if (fileName == String.Empty || theEntry.Name.IndexOf(".ini") >= 0)
-                        continue;
+                    Directory.CreateDirectory(outputFolder);
+                }
 
-                    var fullPath = Path.Combine(directoryName, theEntry.Name);
-                    fullPath = fullPath.Replace("\\ ", "\\");
-                    var fullDirPath = Path.GetDirectoryName(fullPath);
-                    if (fullDirPath != null && !Directory.Exists(fullDirPath))
-                        Directory.CreateDirectory(fullDirPath);
-                    var streamWriter = File.Create(fullPath);
-                    var data = new byte[2048];
+                using (var zipFileStream = File.OpenRead(zipPathAndFile))
+                using (var zipInputStream = new ZipInputStream(zipFileStream))
+                {
                     while (true)
                     {
-                        var size = s.Read(data, 0, data.Length);
-                        if (size > 0)
-                        {
-                            streamWriter.Write(data, 0, size);
-                        }
-                        else
+                        var entry = zipInputStream.GetNextEntry();
+
+                        if (entry == null)
                         {
                             break;
                         }
+
+                        var fileName = Path.GetFileName(entry.Name);
+
+                        if (fileName == string.Empty || entry.Name.Contains(".ini"))
+                        {
+                            continue;
+                        }
+
+                        var fullPath = Path.Combine(outputFolder, entry.Name).Replace("\\ ", "\\");
+                        var fullDirPath = Path.GetDirectoryName(fullPath);
+                        if (fullDirPath != null && !Directory.Exists(fullDirPath))
+                        {
+                            Directory.CreateDirectory(fullDirPath);
+                        }
+
+                        using (var fileStream = File.Create(fullPath))
+                        {
+                            zipInputStream.CopyTo(fileStream);
+                        }
                     }
-                    streamWriter.Close();
                 }
-                s.Close();
+
                 if (deleteZipFile)
+                {
                     File.Delete(zipPathAndFile);
+                }
             }
             catch (Exception e)
             {
@@ -170,7 +177,7 @@ namespace Gource
             }
         }
 
-        public int DownloadFile(String remoteFilename, String localFilename)
+        private static int DownloadFile(string remoteFilename, string localFilename)
         {
             // Function will return the number of bytes processed
             // to the caller. Initialize to 0 here.
@@ -210,7 +217,8 @@ namespace Gource
 
                     // Increment total bytes processed
                     bytesProcessed += bytesRead;
-                } while (bytesRead > 0);
+                }
+                while (bytesRead > 0);
             }
             catch (Exception e)
             {
@@ -221,7 +229,7 @@ namespace Gource
                 // Close the response and streams objects here
                 // to make sure they're closed even if an exception
                 // is thrown at some point
-                if (localStream != null) localStream.Close();
+                localStream?.Close();
             }
 
             // Return total bytes processed to caller.
@@ -238,8 +246,8 @@ namespace Gource
 
                 var response = webClient.DownloadString(@"https://github.com/acaudwell/Gource/releases/latest");
 
-                //find http://gource.googlecode.com/files/gource-0.26b.win32.zip
-                //find http://gource.googlecode.com/files/gource-0.34-rc2.win32.zip
+                // find http://gource.googlecode.com/files/gource-0.26b.win32.zip
+                // find http://gource.googlecode.com/files/gource-0.34-rc2.win32.zip
                 var regEx = new Regex(@"(?:<a .*href="")(.*gource-.{3,15}win32\.zip)""");
 
                 var matches = regEx.Matches(response);

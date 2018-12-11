@@ -14,17 +14,21 @@ namespace GitUI
             _counter = 0;
             Width = 200;
             Height = 20;
-            _blinkTimer = new Timer {Interval = 150, Enabled = true};
+            _blinkTimer = new Timer { Interval = 150, Enabled = true };
             _blinkTimer.Tick += _blinkTimer_Tick;
             _blinkTimer.Start();
         }
 
-        void _blinkTimer_Tick(object sender, EventArgs e)
+        private void _blinkTimer_Tick(object sender, EventArgs e)
         {
             if (BackColor == Color.Salmon && Parent != null)
+            {
                 BackColor = Parent.BackColor;
+            }
             else
+            {
                 BackColor = Color.Salmon;
+            }
 
             _counter++;
 
@@ -34,6 +38,5 @@ namespace GitUI
                 BackColor = Color.Salmon;
             }
         }
-
     }
 }

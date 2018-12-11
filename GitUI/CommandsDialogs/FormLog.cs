@@ -1,29 +1,22 @@
 ﻿using System;
-using System.Windows.Forms;
-using GitCommands;
 
 namespace GitUI.CommandsDialogs
 {
     public partial class FormLog : GitModuleForm
     {
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
         private FormLog()
-            : this(null)
-        {
-        }
-
-        public FormLog(GitUICommands aCommands)
-            : base(true, aCommands)
         {
             InitializeComponent();
-            Translate();
-
-            diffViewer.ExtraDiffArgumentsChanged += DiffViewerExtraDiffArgumentsChanged;
         }
 
-        public FormLog(GitUICommands aCommands, GitRevision revision)
-            : this(aCommands)
+        public FormLog(GitUICommands commands)
+            : base(commands)
         {
-            RevisionGrid.SetSelectedRevision(revision);
+            InitializeComponent();
+            InitializeComplete();
+
+            diffViewer.ExtraDiffArgumentsChanged += DiffViewerExtraDiffArgumentsChanged;
         }
 
         private void FormDiffLoad(object sender, EventArgs e)
@@ -40,21 +33,22 @@ namespace GitUI.CommandsDialogs
         {
             if (DiffFiles.SelectedItem == null)
             {
-                diffViewer.ViewPatch("");
+                diffViewer.ViewPatch(null);
                 return;
             }
 
-            Cursor.Current = Cursors.WaitCursor;
-            diffViewer.ViewChanges(RevisionGrid.GetSelectedRevisions(), DiffFiles.SelectedItem, String.Empty);
-            Cursor.Current = Cursors.Default;
+            using (WaitCursorScope.Enter())
+            {
+                diffViewer.ViewChangesAsync(RevisionGrid.GetSelectedRevisions(), DiffFiles.SelectedItem, string.Empty);
+            }
         }
 
         private void RevisionGridSelectionChanged(object sender, EventArgs e)
         {
-            Cursor.Current = Cursors.WaitCursor;
-            DiffFiles.GitItemStatuses = null;
-            DiffFiles.SetDiffs(RevisionGrid.GetSelectedRevisions());
-            Cursor.Current = Cursors.Default;
+            using (WaitCursorScope.Enter())
+            {
+                DiffFiles.SetDiffs(RevisionGrid.GetSelectedRevisions());
+            }
         }
 
         private void DiffViewerExtraDiffArgumentsChanged(object sender, EventArgs e)

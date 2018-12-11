@@ -8,7 +8,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
         {
             InitializeComponent();
             Text = "Diff Viewer";
-            Translate();
+            InitializeComplete();
         }
 
         protected override void SettingsToPage()
@@ -32,7 +32,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
             AppSettings.RememberNumberOfContextLines = chkRememberNumberOfContextLines.Checked;
             AppSettings.OpenSubmoduleDiffInSeparateWindow = chkOpenSubmoduleDiffInSeparateWindow.Checked;
             AppSettings.ShowDiffForAllParents = chkShowDiffForAllParents.Checked;
-            AppSettings.DiffVerticalRulerPosition = (int) VerticalRulerPosition.Value;
+            AppSettings.DiffVerticalRulerPosition = (int)VerticalRulerPosition.Value;
         }
 
         public static SettingsPageReference GetPageReference()

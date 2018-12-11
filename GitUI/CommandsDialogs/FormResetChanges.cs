@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Windows.Forms;
-using ResourceManager;
 
 namespace GitUI.CommandsDialogs
 {
@@ -11,14 +10,19 @@ namespace GitUI.CommandsDialogs
     {
         // CANCEL must be placed at first position because it is the default value when
         // closing the dialog via the X button
-        public enum ActionEnum { Cancel, Reset, ResetAndDelete };
+        public enum ActionEnum
+        {
+            Cancel,
+            Reset,
+            ResetAndDelete
+        }
 
         public ActionEnum SelectedAction { get; private set; }
 
         public FormResetChanges(bool hasExistingFiles, bool hasNewFiles)
         {
             InitializeComponent();
-            Translate();
+            InitializeComplete();
 
             if (!hasExistingFiles)
             {
@@ -46,7 +50,7 @@ namespace GitUI.CommandsDialogs
         /// <param name="hasNewFiles">Are there new (untracked) files selected?</param>
         public static ActionEnum ShowResetDialog(IWin32Window owner, bool hasExistingFiles, bool hasNewFiles)
         {
-            using (FormResetChanges form = new FormResetChanges(hasExistingFiles, hasNewFiles))
+            using (var form = new FormResetChanges(hasExistingFiles, hasNewFiles))
             {
                 form.ShowDialog(owner);
                 return form.SelectedAction;
@@ -61,7 +65,7 @@ namespace GitUI.CommandsDialogs
 
         private void btnReset_Click(object sender, EventArgs e)
         {
-            SelectedAction = (cbDeleteNewFilesAndDirectories.Checked) ? ActionEnum.ResetAndDelete : ActionEnum.Reset;
+            SelectedAction = cbDeleteNewFilesAndDirectories.Checked ? ActionEnum.ResetAndDelete : ActionEnum.Reset;
             Close();
         }
     }

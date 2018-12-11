@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel.Composition;
 using System.Text.RegularExpressions;
 
 namespace GitUIPluginInterfaces.BuildServerIntegration
@@ -13,7 +12,20 @@ namespace GitUIPluginInterfaces.BuildServerIntegration
                 new Regex(regexText);
                 return true;
             }
-            catch (Exception)
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static bool IsUrlValid(string url)
+        {
+            try
+            {
+                var uri = new Uri(url);
+                return true;
+            }
+            catch
             {
                 return false;
             }

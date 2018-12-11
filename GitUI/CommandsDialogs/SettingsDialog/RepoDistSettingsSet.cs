@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using GitCommands;
-using GitCommands.Settings;
+﻿using GitCommands.Settings;
 
 namespace GitUI.CommandsDialogs.SettingsDialog
 {
@@ -15,17 +10,15 @@ namespace GitUI.CommandsDialogs.SettingsDialog
         public readonly RepoDistSettings GlobalSettings;
 
         public RepoDistSettingsSet(
-            RepoDistSettings aEffectiveSettings,
-            RepoDistSettings aLocalSettings,
-            RepoDistSettings aPulledSettings,
-            RepoDistSettings aGlobalSettings)
+            RepoDistSettings effectiveSettings,
+            RepoDistSettings localSettings,
+            RepoDistSettings pulledSettings,
+            RepoDistSettings globalSettings)
         {
-            EffectiveSettings = aEffectiveSettings;
-            LocalSettings = aLocalSettings;
-            RepoDistSettings = aPulledSettings;
-            GlobalSettings = aGlobalSettings;
+            EffectiveSettings = effectiveSettings;
+            LocalSettings = localSettings;
+            RepoDistSettings = pulledSettings;
+            GlobalSettings = globalSettings;
         }
-
-
     }
 }

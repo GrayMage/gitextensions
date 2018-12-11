@@ -1,14 +1,15 @@
 ﻿using System;
-using System.Diagnostics;
-using System.Linq;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
 using Git.hub;
-using GitCommands.Config;
 using GitCommands;
+using GitCommands.Config;
 using GitUIPluginInterfaces;
+using JetBrains.Annotations;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs.BrowseDialog
@@ -23,20 +24,19 @@ namespace GitUI.CommandsDialogs.BrowseDialog
         #endregion
 
         public IWin32Window OwnerWindow;
-        public Version CurrentVersion;
+        public Version CurrentVersion { get; }
         public bool UpdateFound;
-        public string UpdateUrl;
-        public string NewVersion;
+        public string UpdateUrl = "";
+        public string NewVersion = "";
 
         public FormUpdates(Version currentVersion)
         {
-            InitializeComponent();
-            Translate();
-            UpdateFound = false;
-            progressBar1.Visible = true;
             CurrentVersion = currentVersion;
-            UpdateUrl = "";
-            NewVersion = "";
+
+            InitializeComponent();
+            InitializeComplete();
+
+            progressBar1.Visible = true;
             progressBar1.Style = ProgressBarStyle.Marquee;
         }
 
@@ -45,33 +45,34 @@ namespace GitUI.CommandsDialogs.BrowseDialog
             Close();
         }
 
-        public void SearchForUpdatesAndShow(IWin32Window aOwnerWindow, bool alwaysShow)
+        public void SearchForUpdatesAndShow(IWin32Window ownerWindow, bool alwaysShow)
         {
-            OwnerWindow = aOwnerWindow;
+            OwnerWindow = ownerWindow;
             new Thread(SearchForUpdates).Start();
             if (alwaysShow)
-                ShowDialog(aOwnerWindow);
+            {
+                ShowDialog(ownerWindow);
+            }
         }
 
         private void SearchForUpdates()
         {
             try
             {
-                Client github = new Client();
+                var github = new Client();
                 Repository gitExtRepo = github.getRepository("gitextensions", "gitextensions");
-                if (gitExtRepo == null)
-                    return;
 
-                var configData = gitExtRepo.GetRef("heads/configdata");
-                if (configData == null)
-                    return;
+                var configData = gitExtRepo?.GetRef("heads/configdata");
 
-                var tree = configData.GetTree();
+                var tree = configData?.GetTree();
                 if (tree == null)
+                {
                     return;
+                }
 
-                var releases = tree.Tree.Where(entry => "GitExtensions.releases".Equals(entry.Path, StringComparison.InvariantCultureIgnoreCase)).FirstOrDefault();
-                if (releases != null && releases.Blob.Value != null)
+                var releases = tree.Tree.FirstOrDefault(entry => "GitExtensions.releases".Equals(entry.Path, StringComparison.InvariantCultureIgnoreCase));
+
+                if (releases?.Blob.Value != null)
                 {
                     CheckForNewerVersion(releases.Blob.Value.GetContent());
                 }
@@ -84,19 +85,18 @@ namespace GitUI.CommandsDialogs.BrowseDialog
             }
             catch (Exception ex)
             {
-                this.InvokeSync(state =>
+                this.InvokeSync(() =>
                     {
                         if (Visible)
                         {
                             ExceptionUtils.ShowException(this, ex, string.Empty, true);
                         }
-                    }, null);
+                    });
                 Done();
             }
-
         }
 
-        void CheckForNewerVersion(string releases)
+        private void CheckForNewerVersion(string releases)
         {
             var versions = ReleaseVersion.Parse(releases);
             var updates = ReleaseVersion.GetNewerVersions(CurrentVersion, AppSettings.CheckForReleaseCandidates, versions);
@@ -110,6 +110,7 @@ namespace GitUI.CommandsDialogs.BrowseDialog
                 Done();
                 return;
             }
+
             UpdateUrl = "";
             UpdateFound = false;
             Done();
@@ -117,7 +118,7 @@ namespace GitUI.CommandsDialogs.BrowseDialog
 
         private void Done()
         {
-            this.InvokeSync(o =>
+            this.InvokeSync(() =>
             {
                 progressBar1.Visible = false;
 
@@ -128,13 +129,15 @@ namespace GitUI.CommandsDialogs.BrowseDialog
                     linkChangeLog.Visible = true;
 
                     if (!Visible)
+                    {
                         ShowDialog(OwnerWindow);
+                    }
                 }
                 else
                 {
                     UpdateLabel.Text = _noUpdatesFound.Text;
                 }
-            }, this);
+            });
         }
 
         private void linkChangeLog_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
@@ -148,7 +151,7 @@ namespace GitUI.CommandsDialogs.BrowseDialog
             {
                 Process.Start(UpdateUrl);
             }
-            catch (System.ComponentModel.Win32Exception)
+            catch (Win32Exception)
             {
             }
         }
@@ -167,6 +170,7 @@ namespace GitUI.CommandsDialogs.BrowseDialog
         public ReleaseType ReleaseType;
         public string DownloadPage;
 
+        [CanBeNull]
         public static ReleaseVersion FromSection(IConfigSection section)
         {
             Version ver;
@@ -176,26 +180,25 @@ namespace GitUI.CommandsDialogs.BrowseDialog
             }
             catch (Exception e)
             {
-                System.Diagnostics.Debug.WriteLine(e);
+                Debug.WriteLine(e);
                 return null;
             }
 
-            var version = new ReleaseVersion()
+            var version = new ReleaseVersion
             {
                 Version = ver,
                 ReleaseType = ReleaseType.Major,
                 DownloadPage = section.GetValue("DownloadPage")
             };
 
-            Enum.TryParse<ReleaseType>(section.GetValue("ReleaseType"), true, out version.ReleaseType);
+            Enum.TryParse(section.GetValue("ReleaseType"), true, out version.ReleaseType);
 
             return version;
-
         }
 
         public static IEnumerable<ReleaseVersion> Parse(string versionsStr)
         {
-            ConfigFile cfg = new ConfigFile("", true);
+            var cfg = new ConfigFile("", true);
             cfg.LoadFromString(versionsStr);
             var sections = cfg.GetConfigSections("Version");
             sections = sections.Concat(cfg.GetConfigSections("RCVersion"));
@@ -211,11 +214,9 @@ namespace GitUI.CommandsDialogs.BrowseDialog
             var versions = availableVersions.Where(version =>
                     version.ReleaseType == ReleaseType.Major ||
                     version.ReleaseType == ReleaseType.HotFix ||
-                    checkForReleaseCandidates && version.ReleaseType == ReleaseType.ReleaseCandidate);
+                    (checkForReleaseCandidates && version.ReleaseType == ReleaseType.ReleaseCandidate));
 
             return versions.Where(version => version.Version.CompareTo(currentVersion) > 0);
         }
-
     }
-
 }

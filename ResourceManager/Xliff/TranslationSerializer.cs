@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Xml;
 using System.Xml.Serialization;
+using JetBrains.Annotations;
 
 namespace ResourceManager.Xliff
 {
@@ -11,22 +12,25 @@ namespace ResourceManager.Xliff
         {
             using (TextWriter tw = new StreamWriter(path, false))
             {
-                XmlSerializer serializer = new XmlSerializer(typeof(TranslationFile));
+                var serializer = new XmlSerializer(typeof(TranslationFile));
                 serializer.Serialize(tw, translation);
             }
         }
 
+        [CanBeNull]
         public static TranslationFile Deserialize(string path)
         {
             if (!File.Exists(path))
+            {
                 return null;
+            }
 
-            XmlSerializer serializer = new XmlSerializer(typeof(TranslationFile));
+            var serializer = new XmlSerializer(typeof(TranslationFile));
             TextReader stringReader = null;
             try
             {
                 stringReader = new StreamReader(path);
-                using (XmlTextReader xmlReader = new XmlTextReader(stringReader))
+                using (var xmlReader = new XmlTextReader(stringReader))
                 {
                     stringReader = null;
                     return (TranslationFile)serializer.Deserialize(xmlReader);
@@ -34,8 +38,7 @@ namespace ResourceManager.Xliff
             }
             finally
             {
-                if (stringReader != null)
-                    stringReader.Dispose();
+                stringReader?.Dispose();
             }
         }
     }

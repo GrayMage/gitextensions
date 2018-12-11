@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""Update version in GitExtension source files
+"""
+
 import argparse, sys
 import re
 
@@ -16,21 +22,22 @@ if __name__ == '__main__':
     if not args.text:
       args.text = args.version
     
-    filename = "..\CommonAssemblyInfo.cs"
-    commonAssemblyInfo = open(filename, "r").readlines()
-    for i in range(len(commonAssemblyInfo)):
-        line = commonAssemblyInfo[i]
-        if line.find("[assembly: Assembly") != -1:
-            if line.find("AssemblyVersion(") != -1 or line.find("AssemblyFileVersion(") != -1:
-                data = line.split('"')
-                data[1] = args.version
-                commonAssemblyInfo[i] = '"'.join(data)
-            if line.find("AssemblyInformationalVersion(") != -1:
-                data = line.split('"')
-                data[1] = args.text
-                commonAssemblyInfo[i] = '"'.join(data)
-    outfile = open(filename, "w")
-    outfile.writelines(commonAssemblyInfo)
+    filenames = [ "..\CommonAssemblyInfo.cs", "..\CommonAssemblyInfoExternals.cs" ]
+    for filename in filenames:
+        commonAssemblyInfo = open(filename, "r").readlines()
+        for i in range(len(commonAssemblyInfo)):
+            line = commonAssemblyInfo[i]
+            if line.find("[assembly: Assembly") != -1:
+                if line.find("AssemblyVersion(") != -1 or line.find("AssemblyFileVersion(") != -1:
+                    data = line.split('"')
+                    data[1] = args.version
+                    commonAssemblyInfo[i] = '"'.join(data)
+                if line.find("AssemblyInformationalVersion(") != -1:
+                    data = line.split('"')
+                    data[1] = args.text
+                    commonAssemblyInfo[i] = '"'.join(data)
+        outfile = open(filename, "w")
+        outfile.writelines(commonAssemblyInfo)
     
     filename = "..\GitExtensionsShellEx\GitExtensionsShellEx.rc"
     gitExtensionsShellEx = open(filename, "r").readlines()
@@ -105,17 +112,6 @@ if __name__ == '__main__':
     outfile = open(filename, "w")
     outfile.writelines(makeInstallers)
     
-    filename = "MakeMonoArchive.cmd"
-    makeInstallers = open(filename, "r").readlines()
-    for i in range(len(makeInstallers)):
-        line = makeInstallers[i]
-        if line.find("set version=") == 0:
-            data = line.split('=')
-            data[1] = args.text + '\n'
-            makeInstallers[i] = '='.join(data)
-    outfile = open(filename, "w")
-    outfile.writelines(makeInstallers)
-
     filename = "..\GitExtensionsDoc\source\conf.py"
     docoConf = open(filename, "r").readlines()
     for i in range(len(docoConf)):

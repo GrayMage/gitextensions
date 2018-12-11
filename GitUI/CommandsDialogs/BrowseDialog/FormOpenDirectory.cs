@@ -5,32 +5,35 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using GitCommands;
-using GitCommands.Repository;
+using GitCommands.UserRepositoryHistory;
+using GitExtUtils.GitUI;
+using JetBrains.Annotations;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs.BrowseDialog
 {
     public partial class FormOpenDirectory : GitExtensionsForm
     {
-        private readonly TranslationString _warningOpenFailed =
-            new TranslationString("Directory does not exist.");
+        private readonly TranslationString _warningOpenFailed = new TranslationString("Directory does not exist.");
+        private readonly TranslationString _warningOpenFailedCaption = new TranslationString("Error");
 
-        private readonly TranslationString _warningOpenFailedCaption =
-            new TranslationString("Error");
+        [CanBeNull] private GitModule _chosenModule;
 
-        private GitModule choosenModule = null;
-
-        public FormOpenDirectory(GitModule currentModule)
+        public FormOpenDirectory([CanBeNull] GitModule currentModule)
         {
             InitializeComponent();
-            Translate();
+            InitializeComplete();
 
-            _NO_TRANSLATE_Directory.DataSource = GetDirectories(currentModule);
+            ThreadHelper.JoinableTaskFactory.Run(async () =>
+            {
+                var repositoryHistory = await RepositoryHistoryManager.Locals.LoadRecentHistoryAsync();
 
-            Load.Select();
-
-            _NO_TRANSLATE_Directory.Focus();
-            _NO_TRANSLATE_Directory.Select();
+                await this.SwitchToMainThreadAsync();
+                _NO_TRANSLATE_Directory.DataSource = GetDirectories(currentModule, repositoryHistory);
+                Load.Select();
+                _NO_TRANSLATE_Directory.Focus();
+                _NO_TRANSLATE_Directory.Select();
+            });
         }
 
         protected override void OnRuntimeLoad(EventArgs e)
@@ -38,54 +41,54 @@ namespace GitUI.CommandsDialogs.BrowseDialog
             base.OnRuntimeLoad(e);
 
             // scale up for hi DPI
-            float scale = GetScaleFactor();
-            MaximumSize = new Size((int)(800 * scale), (int)(116 * scale));
-            MinimumSize = new Size((int)(450 * scale), (int)(116 * scale));
+            MaximumSize = DpiUtil.Scale(new Size(800, 116));
+            MinimumSize = DpiUtil.Scale(new Size(450, 116));
         }
 
-        private IList<string> GetDirectories(GitModule currentModule)
+        private static IReadOnlyList<string> GetDirectories([CanBeNull] GitModule currentModule, IEnumerable<Repository> repositoryHistory)
         {
-            List<string> directories = new List<string>();
+            var directories = new List<string>();
 
             if (AppSettings.DefaultCloneDestinationPath.IsNotNullOrWhitespace())
             {
-                directories.Add(PathUtil.EnsureTrailingPathSeparator(AppSettings.DefaultCloneDestinationPath));
+                directories.Add(AppSettings.DefaultCloneDestinationPath.EnsureTrailingPathSeparator());
             }
 
-            if (currentModule != null && !string.IsNullOrWhiteSpace(currentModule.WorkingDir))
+            if (!string.IsNullOrWhiteSpace(currentModule?.WorkingDir))
             {
-                DirectoryInfo di = new DirectoryInfo(currentModule.WorkingDir);
+                var di = new DirectoryInfo(currentModule.WorkingDir);
                 if (di.Parent != null)
                 {
-                    directories.Add(PathUtil.EnsureTrailingPathSeparator(di.Parent.FullName));
+                    directories.Add(di.Parent.FullName.EnsureTrailingPathSeparator());
                 }
             }
 
-            directories.AddRange(Repositories.RepositoryHistory.Repositories.Select(r => r.Path));
+            directories.AddRange(repositoryHistory.Select(r => r.Path));
 
             if (directories.Count == 0)
             {
                 if (AppSettings.RecentWorkingDir.IsNotNullOrWhitespace())
                 {
-                    directories.Add(PathUtil.EnsureTrailingPathSeparator(AppSettings.RecentWorkingDir));
+                    directories.Add(AppSettings.RecentWorkingDir.EnsureTrailingPathSeparator());
                 }
 
-                string homeDir = GitCommandHelpers.GetHomeDir();
+                string homeDir = EnvironmentConfiguration.GetHomeDir();
                 if (homeDir.IsNotNullOrWhitespace())
                 {
-                    directories.Add(PathUtil.EnsureTrailingPathSeparator(homeDir));
+                    directories.Add(homeDir.EnsureTrailingPathSeparator());
                 }
             }
 
             return directories.Distinct().ToList();
         }
 
-        public static GitModule OpenModule(IWin32Window owner, GitModule currentModule)
+        [CanBeNull]
+        public static GitModule OpenModule(IWin32Window owner, [CanBeNull] GitModule currentModule)
         {
             using (var open = new FormOpenDirectory(currentModule))
             {
                 open.ShowDialog(owner);
-                return open.choosenModule;
+                return open._chosenModule;
             }
         }
 
@@ -94,8 +97,8 @@ namespace GitUI.CommandsDialogs.BrowseDialog
             _NO_TRANSLATE_Directory.Text = _NO_TRANSLATE_Directory.Text.Trim();
             if (Directory.Exists(_NO_TRANSLATE_Directory.Text))
             {
-                choosenModule = new GitModule(_NO_TRANSLATE_Directory.Text);
-                Repositories.AddMostRecentRepository(choosenModule.WorkingDir);
+                _chosenModule = new GitModule(_NO_TRANSLATE_Directory.Text);
+                ThreadHelper.JoinableTaskFactory.Run(() => RepositoryHistoryManager.Locals.AddAsMostRecentAsync(_chosenModule.WorkingDir));
                 Close();
             }
             else
@@ -112,21 +115,25 @@ namespace GitUI.CommandsDialogs.BrowseDialog
             }
         }
 
-        private void folderGoUpbutton_Click(object sender, EventArgs e)
+        private void folderGoUpButton_Click(object sender, EventArgs e)
         {
             try
             {
-                DirectoryInfo currentDirectory = new DirectoryInfo(_NO_TRANSLATE_Directory.Text);
+                var currentDirectory = new DirectoryInfo(_NO_TRANSLATE_Directory.Text);
                 if (currentDirectory.Parent == null)
+                {
                     return;
+                }
+
                 string parentPath = currentDirectory.Parent.FullName.TrimEnd('\\');
                 _NO_TRANSLATE_Directory.Text = parentPath;
                 _NO_TRANSLATE_Directory.Focus();
                 _NO_TRANSLATE_Directory.Select(_NO_TRANSLATE_Directory.Text.Length, 0);
                 SendKeys.Send(@"\");
             }
-            catch (Exception)
+            catch
             {
+                // no-op
             }
         }
 
@@ -134,12 +141,12 @@ namespace GitUI.CommandsDialogs.BrowseDialog
         {
             try
             {
-                DirectoryInfo currentDirectory = new DirectoryInfo(_NO_TRANSLATE_Directory.Text);
-                folderGoUpbutton.Enabled = currentDirectory.Exists && currentDirectory.Parent != null;
+                var currentDirectory = new DirectoryInfo(_NO_TRANSLATE_Directory.Text);
+                folderGoUpButton.Enabled = currentDirectory.Exists && currentDirectory.Parent != null;
             }
-            catch (Exception)
+            catch
             {
-                folderGoUpbutton.Enabled = false;
+                folderGoUpButton.Enabled = false;
             }
         }
     }

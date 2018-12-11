@@ -2,6 +2,7 @@
 using System.IO;
 using System.IO.Abstractions;
 using System.Linq;
+using JetBrains.Annotations;
 
 namespace GitCommands
 {
@@ -20,11 +21,11 @@ namespace GitCommands
             _fileSystem = fileSystem;
             _environment = environment;
         }
+
         public SshPathLocator()
             : this(new FileSystem(), new EnvironmentAbstraction())
         {
         }
-
 
         /// <summary>
         /// Gets the git SSH command;
@@ -43,12 +44,14 @@ namespace GitCommands
             return ssh ?? "";
         }
 
+        [CanBeNull]
         private string GetSshFromGitDir(string gitBinDirectory)
         {
             if (string.IsNullOrEmpty(gitBinDirectory))
             {
                 return null;
             }
+
             try
             {
                 var gitDirInfo = _fileSystem.Directory.GetParent(gitBinDirectory);
@@ -56,13 +59,13 @@ namespace GitCommands
                 {
                     return null;
                 }
+
                 return _fileSystem.Directory.EnumerateFiles(gitDirInfo.FullName, "ssh.exe", SearchOption.AllDirectories).FirstOrDefault();
             }
-            catch (Exception)
+            catch
             {
                 return null;
             }
-            
         }
     }
 }

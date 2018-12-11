@@ -1,9 +1,11 @@
 ﻿using System.Collections.Generic;
+using JetBrains.Annotations;
 
 namespace GitUIPluginInterfaces.RepositoryHosts
 {
     public interface IHostedRepository
     {
+        [CanBeNull]
         string Owner { get; }
         string Name { get; }
         string Description { get; }
@@ -14,22 +16,27 @@ namespace GitUIPluginInterfaces.RepositoryHosts
 
         string Homepage { get; }
 
+        [CanBeNull]
         string ParentReadOnlyUrl { get; }
+        [CanBeNull]
         string ParentOwner { get; }
 
         string CloneReadWriteUrl { get; }
         string CloneReadOnlyUrl { get; }
 
-        //Slow op
-        List<IHostedBranch> Branches { get; }
+        /// <summary>
+        /// Requests details of branches from the GitHub remote repository.
+        /// </summary>
+        /// <returns>A list of branches, ordered by name.</returns>
+        IReadOnlyList<IHostedBranch> GetBranches();
 
         /// <summary>
         /// Forks the repo owned by somebody else to "my" repos.
         /// </summary>
-        /// <returns>The new repo, owne by me.</returns>
+        /// <returns>The new repo, owned by me.</returns>
         IHostedRepository Fork();
 
-        List<IPullRequestInformation> GetPullRequests();
+        IReadOnlyList<IPullRequestInformation> GetPullRequests();
 
         /// <returns>Pull request number</returns>
         int CreatePullRequest(string myBranch, string remoteBranch, string title, string body);
@@ -38,6 +45,6 @@ namespace GitUIPluginInterfaces.RepositoryHosts
     public interface IHostedBranch
     {
         string Name { get; }
-        string Sha { get; }
+        ObjectId Sha { get; }
     }
 }

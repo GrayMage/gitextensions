@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Drawing;
 using System.IO;
 using System.IO.Abstractions;
-using GitCommands.Utils;
 
 namespace GitCommands
 {
@@ -17,7 +16,7 @@ namespace GitCommands
         /// </summary>
         /// <param name="workingDirectory">The git repository working directory.</param>
         /// <param name="relativeFilePath">The relative path to the file.</param>
-        /// <returns>The icon associaited with the given file type or <see langword="null"/>.</returns>
+        /// <returns>The icon associated with the given file type or <see langword="null"/>.</returns>
         Icon Get(string workingDirectory, string relativeFilePath);
     }
 
@@ -39,27 +38,19 @@ namespace GitCommands
         // unit tests only
         internal int CacheCount => LoadedFileIcons.Count;
 
-
         /// <summary>
         /// Retrieves the icon associated with the given file type.
         /// The retrieved icons are cached by extensions.
         /// </summary>
         /// <param name="workingDirectory">The git repository working directory.</param>
         /// <param name="relativeFilePath">The relative path to the file.</param>
-        /// <returns>The icon associaited with the given file type or <see langword="null"/>.</returns>
+        /// <returns>The icon associated with the given file type or <see langword="null"/>.</returns>
         /// <remarks>
-        /// The method takes two parameters to performance reasons - the full path is esstablished 
+        /// The method takes two parameters to performance reasons - the full path is established
         /// only if the file type has not been processed already and the extensions is not cached.
         /// </remarks>
         public Icon Get(string workingDirectory, string relativeFilePath)
         {
-            if (EnvUtils.IsMonoRuntime())
-            {
-                // Mono does not support icon extraction
-                // https://github.com/mono/mono/blob/master/mcs/class/System.Drawing/System.Drawing/Icon.cs#L314
-                return null;
-            }
-
             var extension = Path.GetExtension(relativeFilePath);
             if (string.IsNullOrWhiteSpace(extension))
             {
@@ -74,7 +65,7 @@ namespace GitCommands
                     // if the file doesn't exist - create a blank temp file with the required extension
                     // so we can call Icon.ExtractAssociatedIcon on it
                     // this may have a slight overhead, however an alternative would be extracting
-                    // extensions from the registry and using p/invokes and WinAPI, which have 
+                    // extensions from the registry and using p/invokes and WinAPI, which have
                     // significantly higher maintenance overhead.
 
                     var fullPath = Path.Combine(workingDirectory, relativeFilePath);
@@ -116,7 +107,7 @@ namespace GitCommands
             }
             catch
             {
-                // do nothing 
+                // do nothing
             }
         }
 

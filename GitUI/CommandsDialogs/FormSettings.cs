@@ -1,19 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 using GitCommands;
-using GitCommands.Settings;
 using GitCommands.Utils;
 using GitUI.CommandsDialogs.SettingsDialog;
 using GitUI.CommandsDialogs.SettingsDialog.Pages;
 using GitUI.CommandsDialogs.SettingsDialog.Plugins;
-using GitUI.Plugin;
+using GitUI.Properties;
+using JetBrains.Annotations;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs
 {
     public sealed partial class FormSettings : GitModuleForm, ISettingsPageHost
     {
+        public static readonly string HotkeySettingsName = "Scripts";
+
+        [CanBeNull] private static Type _lastSelectedSettingsPageType;
+
         #region Translation
 
         private readonly TranslationString _cantFindGitMessage =
@@ -27,107 +33,115 @@ namespace GitUI.CommandsDialogs
         #endregion
 
         private readonly CommonLogic _commonLogic;
-        private readonly CheckSettingsLogic _checkSettingsLogic;
-        private IEnumerable<ISettingsPage> SettingsPages { get { return settingsTreeView.SettingsPages; } }
         private readonly string _translatedTitle;
 
-        private FormSettings()
-            : this(null)
-        { }
+        public CheckSettingsLogic CheckSettingsLogic { get; }
 
-        public FormSettings(GitUICommands aCommands, SettingsPageReference initalPage = null)
-            : base(aCommands)
+        private IEnumerable<ISettingsPage> SettingsPages => settingsTreeView.SettingsPages;
+
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
+        private FormSettings()
         {
             InitializeComponent();
-            Translate();
-            _translatedTitle = this.Text;
+        }
+
+        public FormSettings([NotNull] GitUICommands commands, SettingsPageReference initialPage = null)
+            : base(commands)
+        {
+            InitializeComponent();
+            _translatedTitle = Text;
 
             settingsTreeView.SuspendLayout();
-
-            //if form is created for translation purpose
-            if (aCommands == null)
-                return;
 
 #if DEBUG
             buttonDiscard.Visible = true;
 #endif
 
-            settingsTreeView.AddSettingsPage(new GitExtensionsSettingsGroup(), null);
-            SettingsPageReference gitExtPageRef = GitExtensionsSettingsGroup.GetPageReference();
-
             _commonLogic = new CommonLogic(Module);
-            _checkSettingsLogic = new CheckSettingsLogic(_commonLogic);
+            CheckSettingsLogic = new CheckSettingsLogic(_commonLogic);
 
-            var checklistSettingsPage = SettingsPageBase.Create <ChecklistSettingsPage>(this);
-            settingsTreeView.AddSettingsPage(checklistSettingsPage, gitExtPageRef, true); // as root
+            var checklistSettingsPage = SettingsPageBase.Create<ChecklistSettingsPage>(this);
 
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<GitSettingsPage>(this), gitExtPageRef);
+            // Git Extensions settings
+            settingsTreeView.AddSettingsPage(new GitExtensionsSettingsGroup(), null, Images.GitExtensionsLogo16);
+            var gitExtPageRef = GitExtensionsSettingsGroup.GetPageReference();
+            settingsTreeView.AddSettingsPage(checklistSettingsPage, gitExtPageRef, icon: null, asRoot: true);
 
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<GitExtensionsSettingsPage>(this), gitExtPageRef);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<GeneralSettingsPage>(this), gitExtPageRef, Images.GeneralSettings);
 
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<CommitDialogSettingsPage>(this), gitExtPageRef);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<AppearanceSettingsPage>(this), gitExtPageRef, Images.Appearance);
+            var appearanceSettingsPage = AppearanceSettingsPage.GetPageReference();
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<ColorsSettingsPage>(this), appearanceSettingsPage, Images.Colors);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<AppearanceFontsSettingsPage>(this), appearanceSettingsPage, Images.Font);
 
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<AppearanceSettingsPage>(this), gitExtPageRef);
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<RevisionLinksSettingsPage>(this), gitExtPageRef);
-
-
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<ColorsSettingsPage>(this), gitExtPageRef);
-
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<StartPageSettingsPage>(this), gitExtPageRef);
-
-            var globalSettingsSettingsPage = SettingsPageBase.Create<GitConfigSettingsPage>(this);
-            settingsTreeView.AddSettingsPage(globalSettingsSettingsPage, gitExtPageRef);
-
-            var buildServerIntegrationSettingsPage = SettingsPageBase.Create<BuildServerIntegrationSettingsPage>(this);
-            settingsTreeView.AddSettingsPage(buildServerIntegrationSettingsPage, gitExtPageRef);
-
-            var _sshSettingsPage = SettingsPageBase.Create<SshSettingsPage>(this);
-            settingsTreeView.AddSettingsPage(_sshSettingsPage, gitExtPageRef);
-            checklistSettingsPage.SshSettingsPage = _sshSettingsPage;
-
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<ScriptsSettingsPage>(this), gitExtPageRef);
-
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<HotkeysSettingsPage>(this), gitExtPageRef);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<RevisionLinksSettingsPage>(this), gitExtPageRef, Images.Link);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<BuildServerIntegrationSettingsPage>(this), gitExtPageRef, Images.Integration);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<ScriptsSettingsPage>(this), gitExtPageRef, Images.Console);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<HotkeysSettingsPage>(this), gitExtPageRef, Images.Hotkey);
 
             if (EnvUtils.RunningOnWindows())
-                settingsTreeView.AddSettingsPage(SettingsPageBase.Create<ShellExtensionSettingsPage>(this), gitExtPageRef);
-
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<AdvancedSettingsPage>(this), gitExtPageRef);
-            SettingsPageReference advancedPageRef = AdvancedSettingsPage.GetPageReference();
-
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<DetailedSettingsPage>(this), gitExtPageRef);
-            var detailedSettingsPage = DetailedSettingsPage.GetPageReference();
-
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<ConfirmationsSettingsPage>(this), advancedPageRef);
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<FormBrowseRepoSettingsPage>(this), detailedSettingsPage);
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<DiffViewerSettingsPage>(this), detailedSettingsPage);
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<ToolbarSettingsPage>(this), detailedSettingsPage);
-
-            settingsTreeView.AddSettingsPage(new PluginsSettingsGroup(), null);
-            SettingsPageReference pluginsPageRef = PluginsSettingsGroup.GetPageReference();
-            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<PluginRootIntroductionPage>(this), pluginsPageRef, true); // as root
-            foreach (var gitPlugin in LoadedPlugins.Plugins)
             {
-                var settingsPage = PluginSettingsPage.CreateSettingsPageFromPlugin(this, gitPlugin);
-                settingsTreeView.AddSettingsPage(settingsPage, pluginsPageRef);
+                settingsTreeView.AddSettingsPage(SettingsPageBase.Create<ShellExtensionSettingsPage>(this), gitExtPageRef, Images.ShellExtensions);
             }
 
-            settingsTreeView.GotoPage(initalPage);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<AdvancedSettingsPage>(this), gitExtPageRef, Images.AdvancedSettings);
+            SettingsPageReference advancedPageRef = AdvancedSettingsPage.GetPageReference();
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<ConfirmationsSettingsPage>(this), advancedPageRef, Images.BisectGood);
+
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<DetailedSettingsPage>(this), gitExtPageRef, Images.Settings);
+            var detailedSettingsPage = DetailedSettingsPage.GetPageReference();
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<FormBrowseRepoSettingsPage>(this), detailedSettingsPage, Images.BranchFolder);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<CommitDialogSettingsPage>(this), detailedSettingsPage, Images.CommitSummary);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<DiffViewerSettingsPage>(this), detailedSettingsPage, Images.Diff);
+
+            var sshSettingsPage = SettingsPageBase.Create<SshSettingsPage>(this);
+            settingsTreeView.AddSettingsPage(sshSettingsPage, gitExtPageRef, Images.Key);
+            checklistSettingsPage.SshSettingsPage = sshSettingsPage;
+
+            // Git settings
+            settingsTreeView.AddSettingsPage(new GitSettingsGroup(), null, Images.GitLogo16);
+            var gitPageRef = GitSettingsGroup.GetPageReference();
+
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<GitSettingsPage>(this), gitPageRef, Images.FolderOpen);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<GitConfigSettingsPage>(this), gitPageRef, Images.GeneralSettings);
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<GitConfigAdvancedSettingsPage>(this), gitPageRef, Images.AdvancedSettings);
+
+            // Plugins settings
+            settingsTreeView.AddSettingsPage(new PluginsSettingsGroup(), null, Images.Plugin);
+            SettingsPageReference pluginsPageRef = PluginsSettingsGroup.GetPageReference();
+            settingsTreeView.AddSettingsPage(SettingsPageBase.Create<PluginRootIntroductionPage>(this), pluginsPageRef, icon: null, asRoot: true);
+
+            var pluginEntries = PluginRegistry.Plugins
+                .Where(p => p.GetSettings().Any())
+                .Select(plugin => (Plugin: plugin, Page: PluginSettingsPage.CreateSettingsPageFromPlugin(this, plugin)))
+                .OrderBy(entry => entry.Page.GetTitle(), StringComparer.CurrentCultureIgnoreCase);
+
+            foreach (var entry in pluginEntries)
+            {
+                settingsTreeView.AddSettingsPage(entry.Page, pluginsPageRef, entry.Plugin.Icon as Bitmap);
+            }
+
+            if (initialPage == null && _lastSelectedSettingsPageType != null)
+            {
+                initialPage = new SettingsPageReferenceByType(_lastSelectedSettingsPageType);
+            }
+
+            settingsTreeView.GotoPage(initialPage);
             settingsTreeView.ResumeLayout();
+
+            InitializeComplete();
         }
 
-        public static DialogResult ShowSettingsDialog(GitUICommands uiCommands, IWin32Window owner, SettingsPageReference initalPage = null)
+        public static DialogResult ShowSettingsDialog(GitUICommands uiCommands, IWin32Window owner, SettingsPageReference initialPage = null)
         {
             DialogResult result = DialogResult.None;
 
-            using (var form = new FormSettings(uiCommands, initalPage))
+            using (var form = new FormSettings(uiCommands, initialPage))
             {
-
                 AppSettings.UsingContainer(form._commonLogic.RepoDistSettingsSet.GlobalSettings, () =>
                 {
-                     result = form.ShowDialog(owner);
+                    result = form.ShowDialog(owner);
                 });
-
             }
 
             return result;
@@ -136,25 +150,33 @@ namespace GitUI.CommandsDialogs
         private void FormSettings_Load(object sender, EventArgs e)
         {
             if (DesignMode)
+            {
                 return;
+            }
 
             WindowState = FormWindowState.Normal;
         }
 
         private void FormSettings_Shown(object sender, EventArgs e)
         {
-            Cursor.Current = Cursors.WaitCursor;
-            LoadSettings();
-            Cursor.Current = Cursors.Default;
+            using (WaitCursorScope.Enter())
+            {
+                LoadSettings();
+            }
         }
 
-        private void settingsTreeViewUserControl1_SettingsPageSelected(object sender, SettingsPageSelectedEventArgs e)
+        private void OnSettingsPageSelected(object sender, SettingsPageSelectedEventArgs e)
         {
             panelCurrentSettingsPage.Controls.Clear();
 
             var settingsPage = e.SettingsPage;
 
-            if (settingsPage != null && settingsPage.GuiControl != null)
+            if (settingsPage != null)
+            {
+                _lastSelectedSettingsPageType = settingsPage.GetType();
+            }
+
+            if (settingsPage?.GuiControl != null)
             {
                 panelCurrentSettingsPage.Controls.Add(settingsPage.GuiControl);
                 e.SettingsPage.GuiControl.Dock = DockStyle.Fill;
@@ -165,12 +187,13 @@ namespace GitUI.CommandsDialogs
                     title = "Plugin: " + title;
                 }
 
-                this.Text = _translatedTitle + " - " + title;
+                Text = _translatedTitle + " - " + title;
                 Application.DoEvents();
 
-                Cursor.Current = Cursors.WaitCursor;
-                settingsPage.OnPageShown();
-                Cursor.Current = Cursors.Default;
+                using (WaitCursorScope.Enter())
+                {
+                    settingsPage.OnPageShown();
+                }
 
                 bool isInstantSavePage = settingsPage.IsInstantSavePage;
                 labelInstantSaveNotice.Visible = isInstantSavePage;
@@ -184,7 +207,7 @@ namespace GitUI.CommandsDialogs
             }
             else
             {
-                this.Text = _translatedTitle;
+                Text = _translatedTitle;
             }
         }
 
@@ -200,6 +223,7 @@ namespace GitUI.CommandsDialogs
             catch (Exception e)
             {
                 ExceptionUtils.ShowException(e);
+
                 // Bail out before the user saves the incompletely loaded settings
                 // and has their day ruined.
                 DialogResult = DialogResult.Abort;
@@ -210,17 +234,18 @@ namespace GitUI.CommandsDialogs
 
         private void Ok_Click(object sender, EventArgs e)
         {
-            Cursor.Current = Cursors.WaitCursor;
-            if (Save())
+            using (WaitCursorScope.Enter())
             {
-                Close();
+                if (Save())
+                {
+                    Close();
+                }
             }
-            Cursor.Current = Cursors.Default;
         }
 
         private bool Save()
         {
-            if (!_checkSettingsLogic.CanFindGitCmd())
+            if (!CheckSettingsLogic.CanFindGitCmd())
             {
                 if (MessageBox.Show(this, _cantFindGitMessage.Text, _cantFindGitMessageCaption.Text,
                         MessageBoxButtons.YesNo) == DialogResult.Yes)
@@ -238,38 +263,15 @@ namespace GitUI.CommandsDialogs
             _commonLogic.RepoDistSettingsSet.EffectiveSettings.Save();
 
             if (EnvUtils.RunningOnWindows())
+            {
                 FormFixHome.CheckHomePath();
-
-            // TODO: to which settings page does this belong?
-            GitCommandHelpers.SetEnvironmentVariable(true);
+            }
 
             // TODO: this method has a generic sounding name but only saves some specific settings
             AppSettings.SaveSettings();
 
             return true;
         }
-
-        // TODO: needed?
-        private void FormSettings_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            ////Cursor.Current = Cursors.WaitCursor;
-            ////if (DialogResult != DialogResult.Abort)
-            ////{
-            ////    e.Cancel = true;
-            ////}
-            ////Cursor.Current = Cursors.Default;
-        }
-
-        #region Hotkey commands
-
-        public static readonly string HotkeySettingsName = "Scripts";
-
-        internal enum Commands
-        {
-            NothingYet
-        }
-
-        #endregion
 
         private void buttonCancel_Click(object sender, EventArgs e)
         {
@@ -278,16 +280,18 @@ namespace GitUI.CommandsDialogs
 
         private void buttonDiscard_Click(object sender, EventArgs e)
         {
-            Cursor.Current = Cursors.WaitCursor;
-            LoadSettings();
-            Cursor.Current = Cursors.Default;
+            using (WaitCursorScope.Enter())
+            {
+                LoadSettings();
+            }
         }
 
         private void buttonApply_Click(object sender, EventArgs e)
         {
-            Cursor.Current = Cursors.WaitCursor;
-            Save();
-            Cursor.Current = Cursors.Default;
+            using (WaitCursorScope.Enter())
+            {
+                Save();
+            }
         }
 
         public void GotoPage(SettingsPageReference settingsPageReference)
@@ -304,7 +308,5 @@ namespace GitUI.CommandsDialogs
         {
             LoadSettings();
         }
-
-        public CheckSettingsLogic CheckSettingsLogic { get { return _checkSettingsLogic; } }
     }
 }

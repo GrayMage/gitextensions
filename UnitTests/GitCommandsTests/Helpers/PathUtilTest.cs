@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using CommonTestUtils;
+using FluentAssertions;
 using GitCommands;
 using NUnit.Framework;
-using System.IO;
-using FluentAssertions;
-using GitCommands.Utils;
 
 namespace GitCommandsTests.Helpers
 {
@@ -48,24 +48,46 @@ namespace GitCommandsTests.Helpers
         [Test]
         public void EnsureTrailingPathSeparatorTest()
         {
+            Assert.IsNull(((string)null).EnsureTrailingPathSeparator());
+            Assert.AreEqual("".EnsureTrailingPathSeparator(), "");
+
             if (Path.DirectorySeparatorChar == '\\')
             {
-                Assert.AreEqual("".EnsureTrailingPathSeparator(), "");
                 Assert.AreEqual("C".EnsureTrailingPathSeparator(), "C\\");
                 Assert.AreEqual("C:".EnsureTrailingPathSeparator(), "C:\\");
                 Assert.AreEqual("C:\\".EnsureTrailingPathSeparator(), "C:\\");
                 Assert.AreEqual("C:\\Work\\GitExtensions".EnsureTrailingPathSeparator(), "C:\\Work\\GitExtensions\\");
                 Assert.AreEqual("C:\\Work\\GitExtensions\\".EnsureTrailingPathSeparator(), "C:\\Work\\GitExtensions\\");
                 Assert.AreEqual("C:/Work/GitExtensions/".EnsureTrailingPathSeparator(), "C:/Work/GitExtensions/");
+                Assert.AreEqual("\\".EnsureTrailingPathSeparator(), "\\");
+                Assert.AreEqual("/".EnsureTrailingPathSeparator(), "/");
             }
             else
             {
-                Assert.AreEqual("".EnsureTrailingPathSeparator(), "");
                 Assert.AreEqual("/".EnsureTrailingPathSeparator(), "/");
                 Assert.AreEqual("/Work/GitExtensions".EnsureTrailingPathSeparator(), "/Work/GitExtensions/");
                 Assert.AreEqual("/Work/GitExtensions/".EnsureTrailingPathSeparator(), "/Work/GitExtensions/");
                 Assert.AreEqual("/Work/GitExtensions\\".EnsureTrailingPathSeparator(), "/Work/GitExtensions\\/");
             }
+        }
+
+        [Test]
+        public void RemoveTrailingPathSeparatorTest()
+        {
+            Assert.IsNull(((string)null).RemoveTrailingPathSeparator());
+            Assert.AreEqual("".RemoveTrailingPathSeparator(), "");
+
+            var s = Path.DirectorySeparatorChar;
+
+            Assert.AreEqual($"C:{s}".RemoveTrailingPathSeparator(), "C:");
+            Assert.AreEqual("foo".RemoveTrailingPathSeparator(), "foo");
+            Assert.AreEqual($"foo{s}".RemoveTrailingPathSeparator(), "foo");
+            Assert.AreEqual($"foo{s}bar".RemoveTrailingPathSeparator(), $"foo{s}bar");
+            Assert.AreEqual($"foo{s}bar{s}".RemoveTrailingPathSeparator(), $"foo{s}bar");
+
+            Assert.AreEqual("foo/".RemoveTrailingPathSeparator(), "foo");
+            Assert.AreEqual("foo/bar".RemoveTrailingPathSeparator(), "foo/bar");
+            Assert.AreEqual("foo/bar/".RemoveTrailingPathSeparator(), "foo/bar");
         }
 
         [Test]
@@ -78,6 +100,18 @@ namespace GitCommandsTests.Helpers
             Assert.AreEqual(PathUtil.IsLocalFile("/Work/GitExtensions"), true);
             Assert.AreEqual(PathUtil.IsLocalFile("/Work/GitExtensions/"), true);
             Assert.AreEqual(PathUtil.IsLocalFile("ssh://domain\\user@serverip/cache/git/something/something.git"), false);
+        }
+
+        [TestCase(null, false)]
+        [TestCase("", false)]
+        [TestCase("    ", false)]
+        [TestCase("http://", true)]
+        [TestCase("HTTPS://www", true)]
+        [TestCase("git://", true)]
+        [TestCase("SSH", true)]
+        public void IsUrl(string path, bool expected)
+        {
+            PathUtil.IsUrl(path).Should().Be(expected);
         }
 
         [Test]
@@ -111,6 +145,7 @@ namespace GitCommandsTests.Helpers
                 Assert.AreEqual(PathUtil.GetDirectoryName("C:"), "");
                 Assert.AreEqual(PathUtil.GetDirectoryName(""), "");
             }
+
             Assert.AreEqual(PathUtil.GetDirectoryName("//my-pc/Work/GitExtensions/"), "//my-pc/Work/GitExtensions");
             Assert.AreEqual(PathUtil.GetDirectoryName("/Work/GitExtensions/"), "/Work/GitExtensions");
             Assert.AreEqual(PathUtil.GetDirectoryName("/Work/GitExtensions"), "/Work");
@@ -155,8 +190,7 @@ namespace GitCommandsTests.Helpers
         [TestCaseSource(nameof(GetInvalidPaths))]
         public void TryFindFullPath_not_throw_if_file_not_exist(string fileName)
         {
-            string fullPath;
-            PathUtil.TryFindFullPath(fileName, out fullPath).Should().BeFalse();
+            PathUtil.TryFindFullPath(fileName, out _).Should().BeFalse();
         }
 
         private static IEnumerable<string> GetInvalidPaths()
@@ -170,8 +204,106 @@ namespace GitCommandsTests.Helpers
             }
             else
             {
-                //I am not able to figure out any invalid (giving exception) path under mono
+                // I am not able to figure out any invalid (giving exception) path under mono
             }
+        }
+
+        [Test]
+        public void GetDisplayPath()
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+            Assert.AreEqual(@"~\SomePath", PathUtil.GetDisplayPath(Path.Combine(home, "SomePath")));
+            Assert.AreEqual("c:\\SomePath", PathUtil.GetDisplayPath("c:\\SomePath"));
+        }
+
+        [Test]
+        public void TryGetExactPathName()
+        {
+            // TODO: needs rework/refactor
+
+            var paths = new[]
+            {
+                @"C:\Users\Public\desktop.ini",
+                @"C:\pagefile.sys",
+                @"C:\Windows\System32\cmd.exe",
+                @"C:\Users\Default\NTUSER.DAT",
+                @"C:\Program Files (x86)\Microsoft.NET\Primary Interop Assemblies",
+                @"C:\Program Files (x86)",
+                @"Does not exist",
+                @"\\" + Environment.MachineName.ToLower() + @"\c$\Windows\System32",
+                @"..",
+                "",
+                " "
+            };
+
+            var expectedExactPaths = new Dictionary<string, string>()
+            {
+                { @"..", Path.GetDirectoryName(Environment.CurrentDirectory) },
+            };
+
+            foreach (var path in paths)
+            {
+                var lowercasePath = path.ToLower();
+                var expected = File.Exists(lowercasePath) || Directory.Exists(lowercasePath);
+                var actual = PathUtil.TryGetExactPath(lowercasePath, out string exactPath);
+
+                Assert.AreEqual(expected, actual);
+
+                if (actual)
+                {
+                    var expectedPath = expectedExactPaths.TryGetValue(path, out string expectedExactPath) ? expectedExactPath : path;
+                    Assert.AreEqual(expectedPath.ToLower(), exactPath.ToLower());
+                }
+                else
+                {
+                    Assert.IsNull(exactPath);
+                }
+            }
+        }
+
+        [TestCase("Folder1\\file1.txt", true, true)]
+        [TestCase("FOLDER1\\file1.txt", true, false)]
+        [TestCase("fOLDER1\\file1.txt", true, false)]
+        [TestCase("Folder2\\file1.txt", false, false)]
+        public void TryGetExactPathName_should_check_if_path_matches_case(string relativePath, bool isResolved, bool doesMatch)
+        {
+            using (var repo = new GitModuleTestHelper())
+            {
+                // Create a file
+                var notUsed = repo.CreateFile(Path.Combine(repo.TemporaryPath, "Folder1"), "file1.txt", "bla");
+
+                var expected = Path.Combine(repo.TemporaryPath, relativePath);
+
+                Assert.AreEqual(isResolved, PathUtil.TryGetExactPath(expected, out string exactPath));
+                Assert.AreEqual(doesMatch, exactPath == expected);
+            }
+        }
+
+        [Test]
+        public void GetFileExtension()
+        {
+            Assert.AreEqual("txt", PathUtil.GetFileExtension("foo.txt"));
+            Assert.AreEqual("txt", PathUtil.GetFileExtension("foo.txt.txt"));
+            Assert.AreEqual("txt", PathUtil.GetFileExtension(".txt"));
+            Assert.AreEqual("", PathUtil.GetFileExtension("foo."));
+            Assert.AreEqual("", PathUtil.GetFileExtension("."));
+            Assert.AreEqual("", PathUtil.GetFileExtension(".."));
+            Assert.AreEqual("", PathUtil.GetFileExtension("..."));
+            Assert.Null(PathUtil.GetFileExtension("foo"));
+            Assert.Null(PathUtil.GetFileExtension(""));
+        }
+
+        [TestCase("/foo/bar", new[] { "\\foo\\", "\\" })]
+        [TestCase("/foo/bar/", new[] { "\\foo\\", "\\" })]
+        [TestCase("/foo", new[] { "\\" })]
+        [TestCase("/foo/", new[] { "\\" })]
+        [TestCase("/", new string[0])]
+        [TestCase("C:\\foo\\bar", new[] { "C:\\foo\\", "C:\\" })]
+        [TestCase("C:\\", new string[0])]
+        public void FindAncestors(string path, string[] expected)
+        {
+            Assert.AreEqual(expected, PathUtil.FindAncestors(path).ToArray());
         }
     }
 }

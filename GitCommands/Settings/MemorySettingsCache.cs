@@ -1,18 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 
 namespace GitCommands.Settings
 {
     public class MemorySettingsCache : SettingsCache
     {
-        private IDictionary<string, string> stringSettings = new Dictionary<string, string>();
+        private readonly IDictionary<string, string> _stringSettings = new Dictionary<string, string>();
 
         protected override void LoadImpl()
         {
-            //cached in memory, do nothing
+            // cached in memory, do nothing
         }
 
         protected override bool NeedRefresh()
@@ -22,18 +18,17 @@ namespace GitCommands.Settings
 
         protected override void SaveImpl()
         {
-            //cached in memory, do nothing
+            // cached in memory, do nothing
         }
 
         protected override void SetValueImpl(string key, string value)
         {
-            stringSettings[key] = value;
+            _stringSettings[key] = value;
         }
 
         protected override string GetValueImpl(string key)
         {
-            string value = null;
-            if (stringSettings.TryGetValue(key, out value))
+            if (_stringSettings.TryGetValue(key, out var value))
             {
                 return value;
             }
@@ -43,7 +38,7 @@ namespace GitCommands.Settings
 
         protected override void ClearImpl()
         {
-            stringSettings.Clear();
+            _stringSettings.Clear();
         }
     }
 }

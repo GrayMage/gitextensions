@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Windows.Forms;
 using ResourceManager;
 
@@ -11,9 +12,9 @@ namespace GitUI.CommandsDialogs.SettingsDialog
     {
         public string Title { get; set; }
 
-        protected GroupSettingsPage(string aTitle)
+        protected GroupSettingsPage(string title)
         {
-            Title = aTitle;
+            Title = title;
             Translator.Translate(this, GitCommands.AppSettings.CurrentTranslation);
         }
 
@@ -22,7 +23,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog
             return Title;
         }
 
-        public Control GuiControl { get { return null; } }
+        public Control GuiControl => null;
 
         public void OnPageShown()
         {
@@ -37,19 +38,12 @@ namespace GitUI.CommandsDialogs.SettingsDialog
         }
 
         public IEnumerable<string> GetSearchKeywords()
-        {            
-            return new string[] { };
-        }
-
-        public bool IsInstantSavePage
         {
-            get { return false; }
+            return Array.Empty<string>();
         }
 
-        public SettingsPageReference PageReference
-        {
-            get { return new SettingsPageReferenceByType(GetType()); }
-        }
+        public bool IsInstantSavePage => false;
 
+        public SettingsPageReference PageReference => new SettingsPageReferenceByType(GetType());
     }
 }

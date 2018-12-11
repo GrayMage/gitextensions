@@ -1,14 +1,12 @@
 ﻿using System;
+using System.Linq;
+using System.Threading.Tasks;
+using FluentAssertions;
 using GitCommands;
 using GitCommands.Gpg;
-using NUnit.Framework;
 using GitUIPluginInterfaces;
 using NSubstitute;
-using NSubstitute.ExceptionExtensions;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using FluentAssertions;
-
+using NUnit.Framework;
 
 namespace GitCommandsTests.Git.Gpg
 {
@@ -21,10 +19,9 @@ namespace GitCommandsTests.Git.Gpg
         [SetUp]
         public void Setup()
         {
-            _module = Substitute.For<Func<IGitModule> >();
+            _module = Substitute.For<Func<IGitModule>>();
             _gpgController = new GitGpgController(_module);
         }
-
 
         [TestCase(CommitStatus.GoodSignature, "G")]
         [TestCase(CommitStatus.SignatureError, "B")]
@@ -36,81 +33,90 @@ namespace GitCommandsTests.Git.Gpg
         [TestCase(CommitStatus.NoSignature, "N")]
         public async Task Validate_GetRevisionCommitSignatureStatusAsync(CommitStatus expected, string gitCmdReturn)
         {
-            var guid = Guid.NewGuid().ToString("N");
+            var objectId = ObjectId.Random();
 
-            GitRevision revision = new GitRevision(null, guid);
+            var revision = new GitRevision(objectId);
+            var args = new GitArgumentBuilder("log")
+            {
+                "--pretty=\"format:%G?\"",
+                "-1",
+                revision.Guid
+            };
+            _module().RunGitCmd(Arg.Is<ArgumentString>(arg => arg.ToString().Equals(args.ToString())))
+                .Returns(x => gitCmdReturn);
 
-            _module().RunGitCmd($"log --pretty=\"format:%G?\" -1 {revision.Guid}").Returns(gitCmdReturn);
-            
             var actual = await _gpgController.GetRevisionCommitSignatureStatusAsync(revision);
 
             Assert.AreEqual(expected, actual);
         }
 
-
         [TestCase]
         public void Validate_GetRevisionCommitSignatureStatusAsync_null_revision()
         {
-            ((Func<Task>)(async () => await _gpgController.GetRevisionCommitSignatureStatusAsync(null))).ShouldThrow<ArgumentNullException>();
+            ((Func<Task>)(() => _gpgController.GetRevisionCommitSignatureStatusAsync(null))).Should().Throw<ArgumentNullException>();
         }
-        
 
         [TestCase]
         public void Validate_GetRevisionTagSignatureStatusAsync_null_revision()
         {
-            ((Func<Task>)(async () => await _gpgController.GetRevisionTagSignatureStatusAsync(null))).ShouldThrow<ArgumentNullException>();
+            ((Func<Task>)(() => _gpgController.GetRevisionTagSignatureStatusAsync(null))).Should().Throw<ArgumentNullException>();
         }
-
 
         [TestCase(TagStatus.NoTag, 0)]
         [TestCase(TagStatus.Many, 2)]
         public async Task Validate_GetRevisionTagSignatureStatusAsync(TagStatus tagStatus, int numberOfTags)
         {
-            var guid = Guid.NewGuid().ToString("N");
+            var objectId = ObjectId.Random();
 
-            GitRevision revision = new GitRevision(null, "");
-            
             string gitRefCompleteName = "refs/tags/FirstTag^{}";
-            
-            for (int i = 0; i < numberOfTags; i++)
+
+            var revision = new GitRevision(objectId)
             {
-                revision.Refs.Add(new GitRef(_module(), guid, gitRefCompleteName));
-            }
-            
+                Refs = Enumerable.Range(0, numberOfTags)
+                    .Select(_ => new GitRef(_module(), objectId, gitRefCompleteName))
+                    .ToList()
+            };
+
             var actual = await _gpgController.GetRevisionTagSignatureStatusAsync(revision);
 
             Assert.AreEqual(tagStatus, actual);
         }
-
 
         [TestCase(TagStatus.OneGood, "GOODSIG ... VALIDSIG ...")]
         [TestCase(TagStatus.TagNotSigned, "error: no signature found")]
         [TestCase(TagStatus.NoPubKey, "NO_PUBKEY ...")]
         public async Task Validate_GetRevisionTagSignatureStatusAsync_one_tag(TagStatus tagStatus, string gitCmdReturn)
         {
-            var guid = Guid.NewGuid().ToString("N");
+            var objectId = ObjectId.Random();
 
-            GitRevision revision = new GitRevision(null, guid);
+            var gitRef = new GitRef(_module(), objectId, "refs/tags/FirstTag^{}");
 
-            GitRef gitRef = new GitRef(_module(), guid, "refs/tags/FirstTag^{}");
-            revision.Refs.Add(gitRef);
-
-            _module().RunGitCmd($"verify-tag --raw {gitRef.LocalName}").Returns(gitCmdReturn);
+            var revision = new GitRevision(objectId) { Refs = new[] { gitRef } };
+            var args = new GitArgumentBuilder("verify-tag")
+            {
+                "--raw",
+                gitRef.LocalName
+            };
+            _module().RunGitCmd(args).Returns(gitCmdReturn);
 
             var actual = await _gpgController.GetRevisionTagSignatureStatusAsync(revision);
 
             Assert.AreEqual(tagStatus, actual);
         }
 
-
         [TestCase("return string")]
         public void Validate_GetCommitVerificationMessage(string returnString)
         {
-            var guid = Guid.NewGuid().ToString("N");
-
-            GitRevision revision = new GitRevision(null, guid);
-
-            _module().RunGitCmd($"log --pretty=\"format:%GG\" -1 {guid}").Returns(returnString);
+            var objectId = ObjectId.Random();
+            var revision = new GitRevision(objectId);
+            var args = new GitArgumentBuilder("log")
+            {
+                "--pretty=\"format:%GG\"",
+                "-1",
+                revision.Guid
+            };
+            _module().RunGitCmd(Arg.Is<ArgumentString>(arg => arg.Arguments.Equals(args.ToString())))
+                .Returns(x => returnString);
 
             var actual = _gpgController.GetCommitVerificationMessage(revision);
 
@@ -123,67 +129,67 @@ namespace GitCommandsTests.Git.Gpg
             Assert.Throws<ArgumentNullException>(() => _gpgController.GetCommitVerificationMessage(null));
         }
 
-
-
         [TestCase]
         public void Validate_GetTagVerifyMessage_null_revision()
         {
             Assert.Throws<ArgumentNullException>(() => _gpgController.GetTagVerifyMessage(null));
         }
 
-
         [TestCase(0, "")]
         [TestCase(1, "TagName")]
         [TestCase(2, "FirstTag\r\nFirstTag\r\n\r\nSecondTag\r\nSecondTag\r\n\r\n")]
         public void Validate_GetTagVerifyMessage(int usefulTagRefNumber, string expected)
         {
-            var guid = Guid.NewGuid().ToString("N");
+            var objectId = ObjectId.Random();
+            var revision = new GitRevision(objectId);
 
-            GitRevision revision = new GitRevision(null, guid);
-
-            GitRef gitRef;
-            string gitRefCompleteName = "";
             switch (usefulTagRefNumber)
             {
                 case 0:
-                    // Tag but not dereference
-                    gitRefCompleteName = "refs/tags/TagName";
-                    gitRef = new GitRef(_module(), guid, gitRefCompleteName);
-                    revision.Refs.Add(gitRef);
+                    {
+                        // Tag but not dereference
+                        var gitRef = new GitRef(_module(), objectId, "refs/tags/TagName");
+                        revision.Refs = new[] { gitRef };
 
-                    _module().RunGitCmd($"verify-tag  {gitRef.LocalName}").Returns("");
+                        var args = new GitArgumentBuilder("verify-tag") { gitRef.LocalName };
+                        _module().RunGitCmd(args).Returns("");
 
-                    break;
+                        break;
+                    }
+
                 case 1:
-                    // One tag that's also IsDereference == true
-                    gitRefCompleteName = "refs/tags/TagName^{}";
-                    gitRef = new GitRef(_module(), guid, gitRefCompleteName);
-                    revision.Refs.Add(gitRef);
+                    {
+                        // One tag that's also IsDereference == true
+                        var gitRef = new GitRef(_module(), objectId, "refs/tags/TagName^{}");
+                        revision.Refs = new[] { gitRef };
 
-                    _module().RunGitCmd($"verify-tag  {gitRef.LocalName}").Returns(gitRef.LocalName);
+                        var args = new GitArgumentBuilder("verify-tag") { gitRef.LocalName };
+                        _module().RunGitCmd(args).Returns(gitRef.LocalName);
 
-                    break;
+                        break;
+                    }
+
                 case 2:
-                    // Two tag that's also IsDereference == true
-                    gitRefCompleteName = "refs/tags/FirstTag^{}";
-                    gitRef = new GitRef(_module(), guid, gitRefCompleteName);
-                    revision.Refs.Add(gitRef);
+                    {
+                        // Two tag that's also IsDereference == true
+                        var gitRef1 = new GitRef(_module(), objectId, "refs/tags/FirstTag^{}");
 
-                    _module().RunGitCmd($"verify-tag  {gitRef.LocalName}").Returns(gitRef.LocalName);
+                        var args = new GitArgumentBuilder("verify-tag") { gitRef1.LocalName };
+                        _module().RunGitCmd(args).Returns(gitRef1.LocalName);
 
-                    gitRefCompleteName = "refs/tags/SecondTag^{}";
-                    gitRef = new GitRef(_module(), guid, gitRefCompleteName);
-                    revision.Refs.Add(gitRef);
+                        var gitRef2 = new GitRef(_module(), objectId, "refs/tags/SecondTag^{}");
+                        revision.Refs = new[] { gitRef1, gitRef2 };
 
-                    _module().RunGitCmd($"verify-tag  {gitRef.LocalName}").Returns(gitRef.LocalName);
+                        args = new GitArgumentBuilder("verify-tag") { gitRef2.LocalName };
+                        _module().RunGitCmd(args).Returns(gitRef2.LocalName);
 
-                    break;
+                        break;
+                    }
             }
 
             var actual = _gpgController.GetTagVerifyMessage(revision);
-            
+
             Assert.AreEqual(expected, actual);
         }
-
     }
 }

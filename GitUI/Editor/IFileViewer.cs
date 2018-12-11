@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Drawing;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+using JetBrains.Annotations;
 
 namespace GitUI.Editor
 {
@@ -11,7 +13,7 @@ namespace GitUI.Editor
             SelectedLine = selectedLine;
         }
 
-        public int SelectedLine { get; private set; }
+        public int SelectedLine { get; }
     }
 
     public interface IFileViewer
@@ -23,14 +25,16 @@ namespace GitUI.Editor
         event EventHandler ScrollPosChanged;
         event EventHandler<SelectedLineEventArgs> SelectedLineChanged;
         event KeyEventHandler KeyDown;
+        event KeyEventHandler KeyUp;
         event EventHandler DoubleClick;
 
         void EnableScrollBars(bool enable);
         void Find();
+        Task FindNextAsync(bool searchForwardOrOpenWithDifftool);
 
         string GetText();
-        void SetText(string text, bool isDiff = false);
-        void SetHighlighting(string syntax);
+        void SetText([NotNull] string text, [CanBeNull] Action openWithDifftool, bool isDiff = false);
+        void SetHighlighting([NotNull] string syntax);
         void SetHighlightingForFile(string filename);
         void HighlightLine(int line, Color color);
         void HighlightLines(int startLine, int endLine, Color color);
@@ -39,6 +43,7 @@ namespace GitUI.Editor
         int GetSelectionPosition();
         int GetSelectionLength();
         void AddPatchHighlighting();
+        Action OpenWithDifftool { get; }
         int ScrollPos { get; set; }
 
         bool ShowLineNumbers { get; set; }
@@ -51,19 +56,18 @@ namespace GitUI.Editor
 
         int FirstVisibleLine { get; set; }
         int GetLineFromVisualPosY(int visualPosY);
-        int LineAtCaret { get; }
+        int LineAtCaret { get; set; }
         string GetLineText(int line);
         int TotalNumberOfLines { get; }
-        //lineNumber is 0 based
-        void GoToLine(int lineNumber);
 
         /// <summary>
-        /// Indicates if the Goto line UI is applicable or not.
-        /// Code-behind goto line function is always availabe, so we can goto next diff section.
+        /// positions to the given line number
         /// </summary>
-        bool IsGotoLineUIApplicable();
+        /// <param name="lineNumber">1..MaxLineNumber</param>
+        void GoToLine(int lineNumber);
+        int MaxLineNumber { get; }
+
         Font Font { get; set; }
-        void FocusTextArea();
 
         void SetFileLoader(GetNextFileFnc fileLoader);
     }

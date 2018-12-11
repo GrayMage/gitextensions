@@ -1,75 +1,101 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Windows.Forms;
+using GitCommands;
+using GitUIPluginInterfaces;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs
 {
     public sealed partial class FormMergeSubmodule : GitModuleForm
     {
-        readonly string _filename;
         private readonly TranslationString _stageFilename = new TranslationString("Stage {0}");
         private readonly TranslationString _deleted = new TranslationString("deleted");
 
-        public FormMergeSubmodule(GitUICommands aCommands, string filename)
-            : base(aCommands)
+        private readonly string _filename;
+
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
+        private FormMergeSubmodule()
         {
             InitializeComponent();
-            Translate();
+        }
+
+        public FormMergeSubmodule(GitUICommands commands, string filename)
+            : base(commands)
+        {
+            InitializeComponent();
+            InitializeComplete();
             lbSubmodule.Text = filename;
-            this._filename = filename;
+            _filename = filename;
         }
 
         private void FormMergeSubmodule_Load(object sender, EventArgs e)
         {
             var item = Module.GetConflict(_filename);
-            this.tbBase.Text = item.Base.Hash ?? _deleted.Text;
-            this.tbLocal.Text = item.Local.Hash ?? _deleted.Text;
-            this.tbRemote.Text = item.Remote.Hash ?? _deleted.Text;
-            this.tbCurrent.Text = Module.GetSubmodule(_filename).GetCurrentCheckout();
+
+            tbBase.Text = item.Base.ObjectId?.ToString() ?? _deleted.Text;
+            tbLocal.Text = item.Local.ObjectId?.ToString() ?? _deleted.Text;
+            tbRemote.Text = item.Remote.ObjectId?.ToString() ?? _deleted.Text;
+            tbCurrent.Text = Module.GetSubmodule(_filename).GetCurrentCheckout()?.ToString() ?? "";
         }
 
         private void btRefresh_Click(object sender, EventArgs e)
         {
-            this.tbCurrent.Text = Module.GetSubmodule(_filename).GetCurrentCheckout();
+            tbCurrent.Text = Module.GetSubmodule(_filename).GetCurrentCheckout()?.ToString() ?? "";
         }
 
         private void StageSubmodule()
         {
-            var processStart = new FormStatus.ProcessStart(delegate(FormStatus form)
+            using (var form = new FormStatus(ProcessStart, string.Format(_stageFilename.Text, _filename)))
+            {
+                form.ShowDialogOnError(this);
+            }
+
+            void ProcessStart(FormStatus form)
+            {
+                form.AddMessageLine(string.Format(_stageFilename.Text, _filename));
+                var args = new GitArgumentBuilder("add")
                 {
-                    form.AddMessageLine(string.Format(_stageFilename.Text,
-                        _filename));
-                    string output = Module.RunGitCmd("add -- \"" + _filename + "\"");
-                    form.AddMessageLine(output);
-                    form.Done(string.IsNullOrEmpty(output));
-                });
-            using (var process = new FormStatus(processStart, null) { Text = string.Format(_stageFilename.Text, _filename) })
-                process.ShowDialogOnError(this);
+                    "--",
+                    _filename.QuoteNE()
+                };
+                string output = Module.RunGitCmd(args);
+                form.AddMessageLine(output);
+                form.Done(isSuccess: string.IsNullOrWhiteSpace(output));
+            }
         }
 
         private void btStageCurrent_Click(object sender, EventArgs e)
         {
             StageSubmodule();
             DialogResult = DialogResult.OK;
-            this.Close();
+            Close();
         }
 
         private void btOpenSubmodule_Click(object sender, EventArgs e)
         {
-            Process process = new Process();
-            process.StartInfo.FileName = Application.ExecutablePath;
-            process.StartInfo.Arguments = "browse";
-            process.StartInfo.WorkingDirectory = Module.GetSubmoduleFullPath(_filename);
+            var process = new Process
+            {
+                StartInfo =
+                {
+                    FileName = Application.ExecutablePath,
+                    Arguments = "browse",
+                    WorkingDirectory = Module.GetSubmoduleFullPath(_filename)
+                }
+            };
+
             process.Start();
         }
 
         private void btCheckoutBranch_Click(object sender, EventArgs e)
         {
-            string[] revisions = { tbLocal.Text, tbRemote.Text };
+            var revisions = new[] { ObjectId.Parse(tbLocal.Text), ObjectId.Parse(tbRemote.Text) };
             var submoduleCommands = new GitUICommands(Module.GetSubmoduleFullPath(_filename));
             if (!submoduleCommands.StartCheckoutBranch(this, revisions))
+            {
                 return;
+            }
+
             StageSubmodule();
             DialogResult = DialogResult.OK;
             Close();

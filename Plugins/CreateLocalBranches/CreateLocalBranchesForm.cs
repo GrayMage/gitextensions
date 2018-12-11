@@ -1,25 +1,27 @@
 ﻿using System;
 using System.Windows.Forms;
+using GitCommands;
 using GitUIPluginInterfaces;
 
 namespace CreateLocalBranches
 {
     public partial class CreateLocalBranchesForm : ResourceManager.GitExtensionsFormBase
     {
-        private GitUIBaseEventArgs m_gitUiCommands;
+        private readonly GitUIEventArgs _gitUiCommands;
 
-        public CreateLocalBranchesForm(GitUIBaseEventArgs gitUiCommands)
+        public CreateLocalBranchesForm(GitUIEventArgs gitUiCommands)
         {
             InitializeComponent();
-            Translate();
+            InitializeComplete();
 
-            m_gitUiCommands = gitUiCommands;
+            _gitUiCommands = gitUiCommands;
         }
 
         private void button1_Click(object sender, EventArgs e)
         {
-            string[] references = m_gitUiCommands.GitModule.RunGitCmd("branch -a")
-                .Split(new[] {'\n'}, StringSplitOptions.RemoveEmptyEntries);
+            var args = new GitArgumentBuilder("branch") { "-a" };
+            string[] references = _gitUiCommands.GitModule.RunGitCmd(args)
+                .Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
             if (references.Length == 0)
             {
@@ -35,7 +37,15 @@ namespace CreateLocalBranches
                     string branchName = reference.Trim('*', ' ', '\n', '\r');
 
                     if (branchName.StartsWith("remotes/" + _NO_TRANSLATE_Remote.Text + "/"))
-                        m_gitUiCommands.GitModule.RunGitCmd(string.Concat("branch --track ", branchName.Replace("remotes/" + _NO_TRANSLATE_Remote.Text + "/", ""), " ", branchName));
+                    {
+                        args = new GitArgumentBuilder("branch")
+                        {
+                            "--track",
+                            branchName.Replace($"remotes/{_NO_TRANSLATE_Remote.Text}/", ""),
+                            branchName
+                        };
+                        _gitUiCommands.GitModule.RunGitCmd(args);
+                    }
                 }
                 catch
                 {

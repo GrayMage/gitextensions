@@ -1,83 +1,41 @@
 ﻿using System.Collections.Generic;
+using JetBrains.Annotations;
+
+// ReSharper disable once CheckNamespace
 
 namespace System.Linq
 {
-
     public static class LinqExtensions
     {
+        [NotNull]
+        [MustUseReturnValue]
+        public static HashSet<T> ToHashSet<T>([NotNull] this IEnumerable<T> source, IEqualityComparer<T> comparer = null) => new HashSet<T>(source, comparer ?? EqualityComparer<T>.Default);
 
-        //
-        // Summary:
-        //     Creates a System.Collections.Generic.Dictionary<TKey,List<TValue>> from an System.Collections.Generic.IEnumerable<T>
-        //     according to a specified key selector function.
-        //
-        // Parameters:
-        //   source:
-        //     An System.Collections.Generic.IEnumerable<T> to create a System.Collections.Generic.Dictionary<TKey,List<TValue>>
-        //     from.
-        //
-        //   keySelector:
-        //     A function to extract a key from each element.
-        //
-        // Type parameters:
-        //   TSource:
-        //     The type of the elements of source.
-        //
-        //   TKey:
-        //     The type of the key returned by keySelector.
-        //
-        // Returns:
-        //     A System.Collections.Generic.Dictionary<TKey,List<TValue>> that contains keys and
-        //     values.
-        //
-        // Exceptions:
-        //   System.ArgumentNullException:
-        //     source or keySelector is null.  -or- keySelector produces a key that is null.
-
-        public static Dictionary<TKey, List<TSource>> ToDictionaryOfList<TSource, TKey>(this IEnumerable<TSource> source, Func<TSource, TKey> keySelector)
+        [NotNull]
+        [MustUseReturnValue]
+        public static HashSet<TKey> ToHashSet<TSource, TKey>(
+            [NotNull] this IEnumerable<TSource> source,
+            [NotNull] Func<TSource, TKey> keySelector)
         {
             if (keySelector == null)
-                throw new ArgumentNullException("keySelector");
-
-            Dictionary<TKey, List<TSource>> result = new Dictionary<TKey, List<TSource>>();
-
-            foreach (TSource sourceElement in source)
             {
-                TKey key = keySelector(sourceElement);
-                if (key == null)
-                {
-                    var ex = new ArgumentNullException("KeySelector produced a key that is null. See exception data for source.");
-                    ex.Data.Add("source", sourceElement);
-                    throw ex;
-                }
-
-                List<TSource> list;
-                if (!result.TryGetValue(key, out list))
-                {
-                    list = new List<TSource>();
-                    result[key] = list;
-                }
-                list.Add(sourceElement);
+                throw new ArgumentNullException(nameof(keySelector));
             }
 
-            return result;
-        }
+            var result = new HashSet<TKey>();
 
-        public static HashSet<TKey> ToHashSet<TSource, TKey>(this IEnumerable<TSource> source, Func<TSource, TKey> keySelector)
-        {
-            if (keySelector == null)
-                throw new ArgumentNullException("keySelector");
-
-            HashSet<TKey> result = new HashSet<TKey>();
-
-            foreach (TSource sourceElement in source)
+            foreach (var element in source)
             {
-                TKey key = keySelector(sourceElement);
+                var key = keySelector(element);
+
                 if (key == null)
                 {
-                    var ex = new ArgumentNullException("KeySelector produced a key that is null. See exception data for source.");
-                    ex.Data.Add("source", sourceElement);
-                    throw ex;
+                    throw new ArgumentException(
+                        "Key selector produced a key that is null. See exception data for source.",
+                        nameof(keySelector))
+                    {
+                        Data = { { "source", element } }
+                    };
                 }
 
                 result.Add(key);
@@ -86,137 +44,176 @@ namespace System.Linq
             return result;
         }
 
-        public static string Join(this IEnumerable<string> source, string separator)
+        [Pure]
+        [NotNull]
+        public static string Join([NotNull] this IEnumerable<string> source, [NotNull] string separator)
         {
-            return string.Join(separator, source.ToArray());
+            return string.Join(separator, source);
         }
 
-
-        //
-        // Summary:
-        //     Sorts the elements of a sequence in ascending order by using a specified
-        //     comparer.
-        //
-        // Parameters:
-        //   source:
-        //     A sequence of values to order.
-        //
-        //   keySelector:
-        //     A function to extract a key from an element.
-        //
-        //   comparer:
-        //     A function to compare keys.
-        //
-        // Type parameters:
-        //   TSource:
-        //     The type of the elements of source.
-        //
-        //   TKey:
-        //     The type of the key returned by keySelector.
-        //
-        // Returns:
-        //     An System.Linq.IOrderedEnumerable<TElement> whose elements are sorted according
-        //     to a key.
-        //
-        // Exceptions:
-        //   System.ArgumentNullException:
-        //     source or keySelector is null.
-        public static IOrderedEnumerable<TSource> OrderBy<TSource, TKey>(this IEnumerable<TSource> source, Func<TSource, TKey> keySelector, Func<TKey, TKey, int> comparer)
+        /// <summary>
+        /// Sorts the elements of a sequence in ascending order by using a specified <paramref name="comparer"/>.
+        /// </summary>
+        /// <typeparam name="TSource">The type of the elements of source.</typeparam>
+        /// <typeparam name="TKey">The type of the key returned by keySelector.</typeparam>
+        /// <param name="source">A sequence of values to order.</param>
+        /// <param name="keySelector">A function to extract a key from an element.</param>
+        /// <param name="comparer">A function to compare keys.</param>
+        /// <returns>An <see cref="IOrderedEnumerable{TElement}"/> whose elements are sorted according to a key.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="keySelector"/> is <c>null</c>.</exception>
+        [NotNull]
+        [LinqTunnel]
+        public static IOrderedEnumerable<TSource> OrderBy<TSource, TKey>(
+            [NotNull] this IEnumerable<TSource> source,
+            [NotNull] Func<TSource, TKey> keySelector,
+            [NotNull] Func<TKey, TKey, int> comparer)
         {
-            FuncComparer<TKey> fc = new FuncComparer<TKey>(comparer);
-
-            return source.OrderBy(keySelector, fc);
+            return source.OrderBy(keySelector, new DelegateComparer<TKey>(comparer));
         }
 
-        private class FuncComparer<T> : IComparer<T>
+        private sealed class DelegateComparer<T> : IComparer<T>
         {
-            private Func<T, T, int> comparer;
+            private readonly Func<T, T, int> _comparer;
 
-            public FuncComparer(Func<T, T, int> comparer)
+            public DelegateComparer(Func<T, T, int> comparer)
             {
-                this.comparer = comparer;
+                _comparer = comparer;
             }
 
             public int Compare(T x, T y)
             {
-                return comparer(x, y);
+                return _comparer(x, y);
             }
         }
 
-
-        //
-        // Summary:
-        //     Transforms each element of an array into a new form by incorporating the
-        //     element's index.
-        //
-        // Parameters:
-        //   source:
-        //     A sequence of values to invoke a transform function on.
-        //
-        //   transformer:
-        //     A transform function to apply to each source element; the second parameter
-        //     of the function represents the index of the source element.
-        //
-        // Type parameters:
-        //   TSource:
-        //     The type of the elements of source.
-        //
-        // Exceptions:
-        //   System.ArgumentNullException:
-        //     source or selector is null.
-        public static void Select<TSource>(this TSource[] source, Func<TSource, int, TSource> transformer)
+        /// <summary>
+        /// Transforms each element of an array into a new form.
+        /// </summary>
+        /// <typeparam name="TSource">The type of the elements of source.</typeparam>
+        /// <param name="source">A sequence of values to invoke a transform function on.</param>
+        /// <param name="transformer">A transform function to apply to each element.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="transformer"/> is <c>null</c>.</exception>
+        public static void Transform<TSource>(
+            [NotNull] this TSource[] source,
+            [NotNull, InstantHandle] Func<TSource, TSource> transformer)
         {
             if (source == null)
-                throw new ArgumentNullException("source");
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
 
             if (transformer == null)
-                throw new ArgumentNullException("transformer");
+            {
+                throw new ArgumentNullException(nameof(transformer));
+            }
 
             for (int i = 0; i < source.Length; i++)
-                source[i] = transformer(source[i], i);
-        }
-
-        //
-        // Summary:
-        //     Transforms each element of an array into a new form.
-        //
-        // Parameters:
-        //   source:
-        //     A sequence of values to invoke a transform function on.
-        //
-        //   transformer:
-        //     A transform function to apply to each element.
-        //
-        // Type parameters:
-        //   TSource:
-        //     The type of the elements of source.
-        //
-        // Exceptions:
-        //   System.ArgumentNullException:
-        //     source or selector is null.
-        public static void Transform<TSource>(this TSource[] source, Func<TSource, TSource> transformer)
-        {
-            if (source == null)
-                throw new ArgumentNullException("source");
-
-            if (transformer == null)
-                throw new ArgumentNullException("transformer");
-
-            for (int i = 0; i < source.Length; i++)
+            {
                 source[i] = transformer(source[i]);
+            }
         }
 
-        public static void AddAll<T>(this IList<T> list, IEnumerable<T> elementsToAdd)
+        public static void AddAll<T>([NotNull] this IList<T> list, [NotNull, InstantHandle] IEnumerable<T> elementsToAdd)
         {
             foreach (T t in elementsToAdd)
+            {
                 list.Add(t);
+            }
         }
 
-        public static void ForEach<T>(this IEnumerable<T> enumerable, Action<T> action)
+        public static void ForEach<T>([NotNull] this IEnumerable<T> enumerable, [NotNull, InstantHandle] Action<T> action)
         {
             foreach (T t in enumerable)
+            {
                 action(t);
+            }
         }
 
+        public static void Swap<T>(this IList<T> list, int index1, int index2)
+        {
+            var temp = list[index1];
+            list[index1] = list[index2];
+            list[index2] = temp;
+        }
+
+        [Pure]
+        [NotNull]
+        public static IReadOnlyList<T> AsReadOnlyList<T>([NotNull] this IEnumerable<T> source)
+        {
+            switch (source)
+            {
+                case IReadOnlyList<T> readOnlyList:
+                {
+                    return readOnlyList;
+                }
+
+                case ICollection<T> collection:
+                {
+                    if (collection.Count == 0)
+                    {
+                        return Array.Empty<T>();
+                    }
+
+                    var items = new T[collection.Count];
+                    collection.CopyTo(items, 0);
+                    return items;
+                }
+            }
+
+            using (var e = source.GetEnumerator())
+            {
+                if (!e.MoveNext())
+                {
+                    return Array.Empty<T>();
+                }
+
+                var list = new List<T>();
+
+                do
+                {
+                    list.Add(e.Current);
+                }
+                while (e.MoveNext());
+
+                return list;
+            }
+        }
+
+        [Pure]
+        [MustUseReturnValue]
+        public static int IndexOf<T>(
+            [NotNull] this IEnumerable<T> source,
+            [NotNull, InstantHandle] Func<T, bool> predicate)
+        {
+            var index = 0;
+
+            foreach (var element in source)
+            {
+                if (predicate(element))
+                {
+                    return index;
+                }
+
+                index++;
+            }
+
+            return -1;
+        }
+
+        [Pure]
+        [MustUseReturnValue]
+        public static TResult[] ToArray<TSource, TResult>(
+            [NotNull] this IReadOnlyList<TSource> source,
+            [NotNull, InstantHandle] Func<TSource, TResult> map)
+        {
+            var array = new TResult[source.Count];
+
+            for (var i = 0; i < source.Count; i++)
+            {
+                array[i] = map(source[i]);
+            }
+
+            return array;
+        }
     }
 }

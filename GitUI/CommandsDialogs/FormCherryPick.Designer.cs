@@ -34,7 +34,7 @@ namespace GitUI.CommandsDialogs
             this.btnChooseRevision = new System.Windows.Forms.Button();
             this.label2 = new System.Windows.Forms.Label();
             this.ParentsLabel = new System.Windows.Forms.Label();
-            this.ParentsList = new System.Windows.Forms.ListView();
+            this.ParentsList = new UserControls.NativeListView();
             this.columnHeader1 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.columnHeader2 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.columnHeader3 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
@@ -71,7 +71,7 @@ namespace GitUI.CommandsDialogs
             // btnChooseRevision
             // 
             this.btnChooseRevision.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnChooseRevision.Image = global::GitUI.Properties.Resources.IconSelectRevision;
+            this.btnChooseRevision.Image = global::GitUI.Properties.Images.SelectRevision;
             this.btnChooseRevision.Location = new System.Drawing.Point(105, 50);
             this.btnChooseRevision.Margin = new System.Windows.Forms.Padding(4);
             this.btnChooseRevision.Name = "btnChooseRevision";
@@ -310,7 +310,7 @@ namespace GitUI.CommandsDialogs
         private System.Windows.Forms.Label BranchInfo;
         private System.Windows.Forms.Button Pick;
         private System.Windows.Forms.CheckBox AutoCommit;
-        private System.Windows.Forms.ListView ParentsList;
+        private UserControls.NativeListView ParentsList;
         private System.Windows.Forms.ColumnHeader columnHeader1;
         private System.Windows.Forms.ColumnHeader columnHeader2;
         private System.Windows.Forms.ColumnHeader columnHeader3;

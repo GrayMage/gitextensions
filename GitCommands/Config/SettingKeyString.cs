@@ -1,5 +1,4 @@
-﻿
-namespace GitCommands.Config
+﻿namespace GitCommands.Config
 {
     /// <summary>
     /// Defines the strings to access certain git config settings.
@@ -11,6 +10,11 @@ namespace GitCommands.Config
         /// "branch.{0}.remote"
         /// </summary>
         public static string BranchRemote = "branch.{0}.remote";
+
+        /// <summary>
+        /// "credential.helper"
+        /// </summary>
+        public static string CredentialHelper = "credential.helper";
 
         /// <summary>
         /// "remote.{0}.push"

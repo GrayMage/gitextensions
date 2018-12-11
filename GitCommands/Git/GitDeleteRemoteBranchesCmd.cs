@@ -3,53 +3,39 @@ using System.Collections.Generic;
 using System.Linq;
 using GitUIPluginInterfaces;
 
-namespace GitCommands
+namespace GitCommands.Git
 {
     public sealed class GitDeleteRemoteBranchesCmd : GitCommand
     {
-        private readonly string remote;
-        private readonly List<IGitRef> branches;
+        private readonly List<string> _branches;
+        private readonly string _remote;
 
-        public GitDeleteRemoteBranchesCmd(string remote, IEnumerable<IGitRef> branches)
+        public GitDeleteRemoteBranchesCmd(string remote, IEnumerable<string> branchLocalNames)
         {
             if (string.IsNullOrEmpty(remote))
-                throw new ArgumentNullException("remote");
-
-            if (branches == null)
-                throw new ArgumentNullException("branches");
-
-            this.remote = remote;
-            this.branches = branches.ToList();
-
-            if (this.branches.Any(b => b.Remote != this.remote))
             {
-                throw new ArgumentException($"Branch remote mismatch. Branch {this.branches.First(b => b.Remote != this.remote).CompleteName} does not belong to remote {remote}");
+                throw new ArgumentNullException(nameof(remote));
             }
-        }
 
-        public override string GitComandName()
-        {
-            return "push";
-        }
-
-        protected override IEnumerable<string> CollectArguments()
-        {
-            yield return remote;
-
-            foreach (var branch in branches)
+            if (branchLocalNames == null)
             {
-                yield return " :\"" + branch.LocalName + "\"";
+                throw new ArgumentNullException(nameof(branchLocalNames));
             }
+
+            _remote = remote;
+            _branches = branchLocalNames.ToList();
         }
 
-        public override bool AccessesRemote()
-        {
-            return true;
-        }
+        public override bool AccessesRemote => true;
+        public override bool ChangesRepoState => true;
 
-        public override bool ChangesRepoState()
+        protected override ArgumentString BuildArguments()
         {
-            return true;
+            return new GitArgumentBuilder("push")
+            {
+                _remote,
+                _branches.Select(branch => $":refs/heads/{branch.Quote()}")
+            };
         }
     }
 }

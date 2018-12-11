@@ -1,88 +1,94 @@
 ﻿using System;
+using System.Linq;
 using System.Windows.Forms;
-using PatchApply;
+using GitCommands;
+using GitCommands.Patches;
+using GitExtUtils.GitUI;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs
 {
     public partial class FormViewPatch : GitModuleForm
     {
-        private readonly TranslationString _patchFileFilterString =
-            new TranslationString("Patch file (*.Patch)");
+        private readonly TranslationString _patchFileFilterString = new TranslationString("Patch file (*.Patch)");
+        private readonly TranslationString _patchFileFilterTitle = new TranslationString("Select patch file");
 
-        private readonly TranslationString _patchFileFilterTitle =
-            new TranslationString("Select patch file");
-
-        public FormViewPatch(GitUICommands aCommands)
-            : base(aCommands)
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
+        private FormViewPatch()
         {
-            InitializeComponent(); Translate();
+            InitializeComponent();
+        }
 
-            PatchManager = new PatchManager();
+        public FormViewPatch(GitUICommands commands)
+            : base(commands)
+        {
+            InitializeComponent();
+
+            typeDataGridViewTextBoxColumn.Width = DpiUtil.Scale(70);
+            File.Width = DpiUtil.Scale(50);
+
+            InitializeComplete();
+
+            typeDataGridViewTextBoxColumn.DataPropertyName = nameof(Patch.ChangeType);
+            File.DataPropertyName = nameof(Patch.FileType);
+            FileNameA.DataPropertyName = nameof(Patch.FileNameA);
         }
 
         public void LoadPatch(string patch)
         {
             PatchFileNameEdit.Text = patch;
-            LoadButton_Click(null, null);
+            LoadPatchFile();
         }
-
-        public PatchManager PatchManager { get; set; }
-        public Patch CurrentPatch { get; set; }
 
         private void GridChangedFiles_SelectionChanged(object sender, EventArgs e)
         {
-            if (GridChangedFiles.SelectedRows.Count == 0) return;
+            if (GridChangedFiles.SelectedRows.Count == 0)
+            {
+                return;
+            }
 
             var patch = (Patch)GridChangedFiles.SelectedRows[0].DataBoundItem;
-            CurrentPatch = patch;
 
-            if (patch == null) return;
+            if (patch == null)
+            {
+                return;
+            }
 
             ChangesList.ViewPatch(patch);
         }
 
-        private string SelectPatchFile(string initialDirectory)
-        {
-            using (var dialog = new OpenFileDialog
-                             {
-                                 Filter = _patchFileFilterString.Text + "|*.patch",
-                                 InitialDirectory = initialDirectory,
-                                 Title = _patchFileFilterTitle.Text
-                             })
-            {
-                return (dialog.ShowDialog(this) == DialogResult.OK) ? dialog.FileName : PatchFileNameEdit.Text;
-            }
-        }
-
         private void BrowsePatch_Click(object sender, EventArgs e)
         {
-            PatchFileNameEdit.Text = SelectPatchFile(@".");
-            LoadButton_Click(sender, e);
+            var dialog = new OpenFileDialog
+            {
+                Filter = _patchFileFilterString.Text + "|*.patch",
+                InitialDirectory = @".",
+                Title = _patchFileFilterTitle.Text
+            };
+
+            using (dialog)
+            {
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    PatchFileNameEdit.Text = dialog.FileName;
+                }
+            }
+
+            LoadPatchFile();
         }
 
-        private void LoadButton_Click(object sender, EventArgs e)
+        private void LoadPatchFile()
         {
             try
             {
-                PatchManager.PatchFileName = PatchFileNameEdit.Text;
-                PatchManager.LoadPatchFile(false, Module.FilesEncoding);
+                var text = System.IO.File.ReadAllText(PatchFileNameEdit.Text, GitModule.LosslessEncoding);
+                var patches = PatchProcessor.CreatePatchesFromString(text, Module.FilesEncoding).ToList();
 
-                GridChangedFiles.DataSource = PatchManager.Patches;
+                GridChangedFiles.DataSource = patches;
             }
             catch
             {
             }
-        }
-
-        private void PatchFileNameEdit_TextChanged(object sender, EventArgs e)
-        {
-
-        }
-
-        private void ViewPatch_Load(object sender, EventArgs e)
-        {
-
         }
     }
 }

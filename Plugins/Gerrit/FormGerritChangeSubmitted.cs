@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Windows.Forms;
 using GitUI;
-using ResourceManager;
 
 namespace Gerrit
 {
@@ -10,7 +9,7 @@ namespace Gerrit
         public FormGerritChangeSubmitted()
         {
             InitializeComponent();
-            Translate();
+            InitializeComplete();
         }
 
         public static void ShowSubmitted(IWin32Window owner, string change)

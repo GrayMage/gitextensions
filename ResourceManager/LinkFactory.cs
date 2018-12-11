@@ -1,8 +1,7 @@
 using System;
-using System.Linq;
-using System.Net;
-using GitCommands;
 using System.Collections.Concurrent;
+using System.Net;
+using GitUIPluginInterfaces;
 
 namespace ResourceManager
 {
@@ -12,14 +11,13 @@ namespace ResourceManager
         string CreateLink(string caption, string uri);
         string CreateTagLink(string tag);
         string CreateBranchLink(string noPrefixBranch);
-        string CreateCommitLink(string guid, string linkText = null, bool preserveGuidInLinkText = false);
-        string ParseLink(string aLinkText);
+        string CreateCommitLink(ObjectId objectId, string linkText = null, bool preserveGuidInLinkText = false);
+        string ParseLink(string linkText);
     }
 
     public sealed class LinkFactory : ILinkFactory
     {
         private readonly ConcurrentDictionary<string, string> _linksMap = new ConcurrentDictionary<string, string>();
-
 
         public void Clear()
         {
@@ -44,53 +42,75 @@ namespace ResourceManager
         public string CreateTagLink(string tag)
         {
             if (tag != "…")
+            {
                 return AddLink(tag, "gitext://gototag/" + tag);
+            }
+
             return WebUtility.HtmlEncode(tag);
         }
 
         public string CreateBranchLink(string noPrefixBranch)
         {
             if (noPrefixBranch != "…")
+            {
                 return AddLink(noPrefixBranch, "gitext://gotobranch/" + noPrefixBranch);
+            }
+
             return WebUtility.HtmlEncode(noPrefixBranch);
         }
 
-        public string CreateCommitLink(string guid, string linkText = null, bool preserveGuidInLinkText = false)
+        public string CreateCommitLink(ObjectId objectId, string linkText = null, bool preserveGuidInLinkText = false)
         {
             if (linkText == null)
             {
-                if (GitRevision.UnstagedGuid == guid)
-                    linkText = Strings.GetCurrentUnstagedChanges();
-                else if (GitRevision.IndexGuid == guid)
-                    linkText = Strings.GetCurrentIndex();
+                if (objectId == ObjectId.WorkTreeId)
+                {
+                    linkText = Strings.Workspace;
+                }
+                else if (objectId == ObjectId.IndexId)
+                {
+                    linkText = Strings.Index;
+                }
+                else if (preserveGuidInLinkText)
+                {
+                    linkText = objectId.ToString();
+                }
                 else
                 {
-                    linkText = preserveGuidInLinkText || guid.Length < 10
-                        ? guid
-                        : guid.Substring(0, 10);
+                    linkText = objectId.ToShortString();
                 }
             }
-            return AddLink(linkText, "gitext://gotocommit/" + guid);
+
+            return AddLink(linkText, "gitext://gotocommit/" + objectId);
         }
 
-        public string ParseLink(string aLinkText)
+        public string ParseLink(string linkText)
         {
-            string linkUri;
-            if (_linksMap.TryGetValue(aLinkText, out linkUri))
+            if (_linksMap.TryGetValue(linkText, out var linkUri))
             {
                 return linkUri;
             }
 
-            string uriCandidate = aLinkText;
-            while (uriCandidate != null)
+            var uriCandidate = linkText;
+
+            while (true)
             {
-                Uri uri;
-                if (Uri.TryCreate(uriCandidate, UriKind.Absolute, out uri))
+                if (Uri.TryCreate(uriCandidate, UriKind.Absolute, out var uri))
+                {
                     return uri.AbsoluteUri;
-                uriCandidate = uriCandidate.SkipStr("#");
+                }
+
+                var idx = uriCandidate.IndexOf('#');
+
+                if (idx == -1)
+                {
+                    break;
+                }
+
+                uriCandidate = uriCandidate.Substring(idx + 1);
             }
 
-            return aLinkText;
+            return linkText;
         }
     }
 }

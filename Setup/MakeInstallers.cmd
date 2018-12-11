@@ -4,8 +4,8 @@ rem
 rem Update this version number with every release
 rem
 setlocal
-set version=2.51.01
-set numericVersion=2.51.01
+set version=3.00.a1
+set numericVersion=2.99.90
 if not "%APPVEYOR_BUILD_VERSION%"=="" (
     set version=%APPVEYOR_BUILD_VERSION%
     set numericVersion=%APPVEYOR_BUILD_VERSION%
@@ -18,12 +18,14 @@ SET BuildType=%2
 IF "%BuildType%"=="" SET BuildType=Rebuild
 
 set normal=GitExtensions-%Version%.msi
+for /f "tokens=*" %%i in ('hMSBuild.bat -only-path -notamd64') do set msbuild="%%i"
+set output=bin\%Configuration%\GitExtensions.msi
 
-set msbuild="%windir%\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe"
-set output=bin\Release\GitExtensions.msi
-set project=Setup.wixproj
-
-set build=%msbuild% %project% /t:%BuildType% /p:Version=%version% /p:NumericVersion=%numericVersion% /p:Configuration=%Configuration% /nologo /v:m
+REM HACK: for some reason when we build the full solution the VSIX contains too many files, clean and rebuild the VSIX
+rmdir ..\GitExtensionsVSIX\bin\Release /s /q
+pushd ..\GitExtensionsVSIX
+%msbuild% /t:%BuildType% /p:Configuration=%Configuration% /nologo /v:m
+popd
 
 echo Creating installers for Git Extensions %version%
 echo.
@@ -33,8 +35,7 @@ del %normal% 2> nul
 
 echo.
 
-echo Building %normal%
-%build%
+%msbuild% Setup.wixproj /t:%BuildType% /p:Version=%version% /p:NumericVersion=%numericVersion% /p:Configuration=%Configuration% /nologo /v:m
 IF ERRORLEVEL 1 EXIT /B 1
 copy %output% %normal%
 IF ERRORLEVEL 1 EXIT /B 1

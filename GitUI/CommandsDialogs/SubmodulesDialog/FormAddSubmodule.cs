@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Windows.Forms;
 using GitCommands;
-using GitCommands.Repository;
+using GitCommands.UserRepositoryHistory;
 using GitUIPluginInterfaces;
 using ResourceManager;
 
@@ -13,11 +13,28 @@ namespace GitUI.CommandsDialogs.SubmodulesDialog
         private readonly TranslationString _remoteAndLocalPathRequired
             = new TranslationString("A remote path and local path are required");
 
-        public FormAddSubmodule(GitUICommands aCommands)
-            : base(aCommands)
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
+        private FormAddSubmodule()
         {
             InitializeComponent();
-            Translate();
+        }
+
+        public FormAddSubmodule(GitUICommands commands)
+            : base(commands)
+        {
+            InitializeComponent();
+            InitializeComplete();
+
+            ThreadHelper.JoinableTaskFactory.Run(async () =>
+            {
+                var repositoryHistory = await RepositoryHistoryManager.Remotes.LoadRecentHistoryAsync();
+
+                await this.SwitchToMainThreadAsync();
+                Directory.DataSource = repositoryHistory;
+                Directory.DisplayMember = nameof(Repository.Path);
+                Directory.Text = "";
+                LocalPath.Text = "";
+            });
         }
 
         private void BrowseClick(object sender, EventArgs e)
@@ -38,12 +55,12 @@ namespace GitUI.CommandsDialogs.SubmodulesDialog
                 return;
             }
 
-            Cursor.Current = Cursors.WaitCursor;
-            var addSubmoduleCmd = GitCommandHelpers.AddSubmoduleCmd(Directory.Text, LocalPath.Text, Branch.Text, chkForce.Checked);
-            FormProcess.ShowDialog(this, addSubmoduleCmd);
+            using (WaitCursorScope.Enter())
+            {
+                FormProcess.ShowDialog(this, GitCommandHelpers.AddSubmoduleCmd(Directory.Text, LocalPath.Text, Branch.Text, chkForce.Checked));
 
-            Close();
-            Cursor.Current = Cursors.Default;
+                Close();
+            }
         }
 
         private void DirectorySelectedIndexChanged(object sender, EventArgs e)
@@ -51,24 +68,21 @@ namespace GitUI.CommandsDialogs.SubmodulesDialog
             DirectoryTextUpdate(null, null);
         }
 
-        private void FormAddSubmoduleShown(object sender, EventArgs e)
-        {
-            Directory.DataSource = Repositories.RemoteRepositoryHistory.Repositories;
-            Directory.DisplayMember = "Path";
-            Directory.Text = "";
-            LocalPath.Text = "";
-        }
-
         private void BranchDropDown(object sender, EventArgs e)
         {
-            GitModule module = new GitModule(Directory.Text);
-            Branch.DisplayMember = "Name";
-            IList<IGitRef> heads;
+            var module = new GitModule(Directory.Text);
+
+            var heads = new List<IGitRef>
+            {
+                GitRef.NoHead(module)
+            };
+
             if (module.IsValidGitWorkingDir())
-                heads = module.GetRefs(false);
-            else
-                heads = new List<IGitRef>();
-            heads.Insert(0, GitRef.NoHead(module));
+            {
+                heads.AddRange(module.GetRefs(false));
+            }
+
+            Branch.DisplayMember = nameof(IGitRef.Name);
             Branch.DataSource = heads;
         }
 

@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using GitCommands;
-using GitCommands.Settings;
+﻿using GitCommands.Settings;
 
 namespace GitUI.CommandsDialogs.SettingsDialog
 {
@@ -14,14 +9,13 @@ namespace GitUI.CommandsDialogs.SettingsDialog
         public readonly ConfigFileSettings GlobalSettings;
 
         public ConfigFileSettingsSet(
-            ConfigFileSettings aEffectiveSettings,
-            ConfigFileSettings aLocalSettings,
-            ConfigFileSettings aGlobalSettings)
+            ConfigFileSettings effectiveSettings,
+            ConfigFileSettings localSettings,
+            ConfigFileSettings globalSettings)
         {
-            EffectiveSettings = aEffectiveSettings;
-            LocalSettings = aLocalSettings;
-            GlobalSettings = aGlobalSettings;
+            EffectiveSettings = effectiveSettings;
+            LocalSettings = localSettings;
+            GlobalSettings = globalSettings;
         }
-
     }
 }

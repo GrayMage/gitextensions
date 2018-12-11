@@ -1,15 +1,15 @@
-﻿using GitUIPluginInterfaces;
-using System;
+﻿using System;
+using GitUIPluginInterfaces;
 
 namespace GitUI.CommandsDialogs.SettingsDialog
 {
     /// <summary>
     /// to jump to a specific page
-    /// 
+    ///
     /// TODO: extend with attributes to jump to specific control on settingspage
     /// </summary>
     public abstract class SettingsPageReference
-    { 
+    {
     }
 
     /// <summary>
@@ -17,18 +17,16 @@ namespace GitUI.CommandsDialogs.SettingsDialog
     /// </summary>
     public class SettingsPageReferenceByType : SettingsPageReference
     {
-        private readonly Type _settingsPageType;
-
         public SettingsPageReferenceByType(Type settingsPageType)
         {
-            _settingsPageType = settingsPageType;
+            SettingsPageType = settingsPageType;
         }
 
-        public Type SettingsPageType { get { return _settingsPageType; } }
+        public Type SettingsPageType { get; }
 
         public override bool Equals(object obj)
         {
-            return obj is SettingsPageReferenceByType && ((SettingsPageReferenceByType)obj).SettingsPageType.Equals(SettingsPageType);
+            return obj is SettingsPageReferenceByType type && type.SettingsPageType == SettingsPageType;
         }
 
         public override int GetHashCode()

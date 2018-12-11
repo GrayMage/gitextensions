@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Drawing;
-using ResourceManager;
 
 namespace GitUI.CommandsDialogs.ResolveConflictsDialog
 {
@@ -10,7 +9,7 @@ namespace GitUI.CommandsDialogs.ResolveConflictsDialog
             : base(true)
         {
             InitializeComponent();
-            Translate();
+            InitializeComplete();
             Aborted = true;
             KeepLocal = false;
             KeepRemote = false;
@@ -64,7 +63,7 @@ namespace GitUI.CommandsDialogs.ResolveConflictsDialog
 
         private void FormModifiedDeletedCreated_Load(object sender, EventArgs e)
         {
-            //save position of this dialog, since the teksts could be to large when larger font is used.
+            // save position of this dialog, since the teksts could be to large when larger font is used.
             CenterToParent();
         }
     }

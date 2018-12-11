@@ -1,47 +1,54 @@
 ﻿using System;
 using System.Drawing;
 using System.Globalization;
+using JetBrains.Annotations;
 
 namespace GitUIPluginInterfaces
 {
     public abstract class ISettingsSource
     {
-        public abstract T GetValue<T>(string name, T defaultValue, Func<string, T> decode);
+        public abstract T GetValue<T>([NotNull] string name, T defaultValue, [NotNull] Func<string, T> decode);
 
-        public abstract void SetValue<T>(string name, T value, Func<T, string> encode);
+        public abstract void SetValue<T>([NotNull] string name, T value, [NotNull] Func<T, string> encode);
 
-        public bool? GetBool(string name)
+        public bool? GetBool([NotNull] string name)
         {
             return GetValue<bool?>(name, null, x =>
             {
-                var val = x.ToString().ToLower();
-                if (val == "true") return true;
-                if (val == "false") return false;
+                if (string.Equals(x, "true", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                if (string.Equals(x, "false", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
                 return null;
             });
         }
 
-        public bool GetBool(string name, bool defaultValue)
+        public bool GetBool([NotNull] string name, bool defaultValue)
         {
             return GetBool(name) ?? defaultValue;
         }
 
-        public void SetBool(string name, bool? value)
+        public void SetBool([NotNull] string name, bool? value)
         {
-            SetValue<bool?>(name, value, (bool? b) => b.HasValue ? (b.Value ? "true" : "false") : null);
+            SetValue(name, value, b => b.HasValue ? (b.Value ? "true" : "false") : null);
         }
 
-        public void SetInt(string name, int? value)
+        public void SetInt([NotNull] string name, int? value)
         {
-            SetValue<int?>(name, value, (int? b) => b.HasValue ? b.ToString() : null);
+            SetValue(name, value, b => b.HasValue ? b.ToString() : null);
         }
 
-        public int? GetInt(string name)
+        public int? GetInt([NotNull] string name)
         {
             return GetValue<int?>(name, null, x =>
             {
-                int result;
-                if (int.TryParse(x, out result))
+                if (int.TryParse(x, out var result))
                 {
                     return result;
                 }
@@ -50,17 +57,16 @@ namespace GitUIPluginInterfaces
             });
         }
 
-        public void SetFloat(string name, float? value)
+        public void SetFloat([NotNull] string name, float? value)
         {
-            SetValue<float?>(name, value, (float? b) => b.HasValue ? b.ToString() : null);
+            SetValue(name, value, b => b.HasValue ? b.ToString() : null);
         }
 
-        public float? GetFloat(string name)
+        public float? GetFloat([NotNull] string name)
         {
             return GetValue<float?>(name, null, x =>
             {
-                float result;
-                if (float.TryParse(x, out result))
+                if (float.TryParse(x, out var result))
                 {
                     return result;
                 }
@@ -69,148 +75,112 @@ namespace GitUIPluginInterfaces
             });
         }
 
-        public DateTime GetDate(string name, DateTime defaultValue)
+        public DateTime GetDate([NotNull] string name, DateTime defaultValue)
         {
             return GetDate(name) ?? defaultValue;
         }
 
-        public void SetDate(string name, DateTime? value)
+        public void SetDate([NotNull] string name, DateTime? value)
         {
-            SetValue<DateTime?>(name, value, (DateTime? b) => b.HasValue ? b.Value.ToString("yyyy/M/dd", CultureInfo.InvariantCulture) : null);
+            SetValue(name, value, b => b?.ToString("yyyy/M/dd", CultureInfo.InvariantCulture));
         }
 
-        public DateTime? GetDate(string name)
+        public DateTime? GetDate([NotNull] string name)
         {
             return GetValue<DateTime?>(name, null, x =>
             {
-                DateTime result;
-                if (DateTime.TryParseExact(x, "yyyy/M/dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out result))
+                if (DateTime.TryParseExact(x, "yyyy/M/dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
+                {
                     return result;
+                }
 
                 return null;
             });
         }
 
-        public int GetInt(string name, int defaultValue)
+        public int GetInt([NotNull] string name, int defaultValue)
         {
             return GetInt(name) ?? defaultValue;
         }
 
-        public void SetFont(string name, Font value)
+        public void SetFont([NotNull] string name, Font value)
         {
-            SetValue<Font>(name, value, x => x.AsString());
+            SetValue(name, value, x => x.AsString());
         }
 
-        public Font GetFont(string name, Font defaultValue)
+        public Font GetFont([NotNull] string name, Font defaultValue)
         {
-            return GetValue<Font>(name, defaultValue, x => x.Parse(defaultValue));
+            return GetValue(name, defaultValue, x => x.Parse(defaultValue));
         }
 
-        public void SetColor(string name, Color? value)
+        public void SetColor([NotNull] string name, Color? value)
         {
-            SetValue<Color?>(name, value, x => x.HasValue ? ColorTranslator.ToHtml(x.Value) : null);
+            SetValue(name, value, x => x.HasValue ? ColorTranslator.ToHtml(x.Value) : null);
         }
 
-        public Color? GetColor(string name)
+        public Color? GetColor([NotNull] string name)
         {
             return GetValue<Color?>(name, null, x => ColorTranslator.FromHtml(x));
         }
 
-        public Color GetColor(string name, Color defaultValue)
+        public Color GetColor([NotNull] string name, Color defaultValue)
         {
             return GetColor(name) ?? defaultValue;
         }
 
-        public void SetEnum<T>(string name, T value)
+        public void SetEnum<T>([NotNull] string name, T value)
         {
-            SetValue<T>(name, value, x => x.ToString());
+            SetValue(name, value, x => x.ToString());
         }
 
-        public T GetEnum<T>(string name, T defaultValue) where T : struct
+        public T GetEnum<T>([NotNull] string name, T defaultValue) where T : struct, Enum
         {
-            return GetValue<T>(name, defaultValue, x =>
+            return GetValue(name, defaultValue, x =>
             {
                 var val = x.ToString();
 
-                T result;
-                if (Enum.TryParse(val, true, out result))
+                if (Enum.TryParse(val, true, out T result))
+                {
                     return result;
+                }
 
                 return defaultValue;
             });
         }
 
-        public void SetNullableEnum<T>(string name, T? value) where T : struct
+        public void SetNullableEnum<T>([NotNull] string name, T? value) where T : struct, Enum
         {
-            SetValue<T?>(name, value, x => x.HasValue ? x.ToString() : string.Empty);
+            SetValue(name, value, x => x.HasValue ? x.ToString() : string.Empty);
         }
 
-        public T? GetNullableEnum<T>(string name) where T : struct
+        public T? GetNullableEnum<T>([NotNull] string name) where T : struct
         {
             return GetValue<T?>(name, null, x =>
             {
                 var val = x.ToString();
 
                 if (string.IsNullOrEmpty(val))
+                {
                     return null;
+                }
 
-                T result;
-                if (Enum.TryParse(val, true, out result))
+                if (Enum.TryParse(val, true, out T result))
+                {
                     return result;
+                }
 
                 return null;
             });
         }
 
-        public void SetString(string name, string value)
+        public void SetString([NotNull] string name, [CanBeNull] string value)
         {
-            SetValue<string>(name, value, s => string.IsNullOrEmpty(s) ? null : s);
+            SetValue(name, value, s => string.IsNullOrEmpty(s) ? null : s);
         }
 
-        public string GetString(string name, string defaultValue)
+        public string GetString([NotNull] string name, string defaultValue)
         {
-            return GetValue<string>(name, defaultValue, x => x);
-        }
-    }
-
-
-    public static class FontParser
-    {
-
-        private static readonly string InvariantCultureId = "_IC_";
-        public static string AsString(this Font value)
-        {
-            return String.Format(CultureInfo.InvariantCulture,
-                "{0};{1};{2}", value.FontFamily.Name, value.Size, InvariantCultureId);
-        }
-
-        public static Font Parse(this string value, Font defaultValue)
-        {
-            if (value == null)
-                return defaultValue;
-
-            string[] parts = value.Split(';');
-
-            if (parts.Length < 2)
-                return defaultValue;
-
-            try
-            {
-                string fontSize;
-                if (parts.Length == 3 && InvariantCultureId.Equals(parts[2]))
-                    fontSize = parts[1];
-                else
-                {
-                    fontSize = parts[1].Replace(",", CultureInfo.InvariantCulture.NumberFormat.NumberDecimalSeparator);
-                    fontSize = fontSize.Replace(".", CultureInfo.InvariantCulture.NumberFormat.NumberDecimalSeparator);
-                }
-
-                return new Font(parts[0], Single.Parse(fontSize, CultureInfo.InvariantCulture));
-            }
-            catch (Exception)
-            {
-                return defaultValue;
-            }
+            return GetValue(name, defaultValue, x => x);
         }
     }
 }

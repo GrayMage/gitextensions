@@ -1,5 +1,4 @@
 ﻿using GitCommands;
-using GitCommands.Utils;
 
 namespace GitUI.CommandsDialogs.SettingsDialog.Pages
 {
@@ -9,30 +8,14 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
         {
             InitializeComponent();
             Text = "Browse repository window";
-            Translate();
+            InitializeComplete();
         }
 
-        protected override void Init(ISettingsPageHost aPageHost)
+        protected override void Init(ISettingsPageHost pageHost)
         {
-            base.Init(aPageHost);
-            BindSettingsWithControls();
-        }
+            base.Init(pageHost);
 
-        protected override void SettingsToPage()
-        {
-            chkShowRevisionInfoNextToRevisionGrid.Checked = AppSettings.ShowRevisionInfoNextToRevisionGrid;
-            chkShowRevisionInfoNextToRevisionGrid.Visible = !EnvUtils.IsMonoRuntime();
-            base.SettingsToPage();
-        }
-
-        protected override void PageToSettings()
-        {
-            AppSettings.ShowRevisionInfoNextToRevisionGrid = chkShowRevisionInfoNextToRevisionGrid.Checked;
-            base.PageToSettings();
-        }
-
-        private void BindSettingsWithControls()
-        {
+            // Bind settings with controls
             AddSettingBinding(AppSettings.ShowConEmuTab, chkChowConsoleTab);
             AddSettingBinding(AppSettings.ConEmuStyle, _NO_TRANSLATE_cboStyle);
             AddSettingBinding(AppSettings.ConEmuTerminal, cboTerminal);

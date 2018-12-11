@@ -1,5 +1,4 @@
-﻿using EnvDTE80;
-using GitPluginShared.Commands;
+﻿using EnvDTE;
 using Microsoft.VisualStudio.Shell;
 
 namespace GitExtensionsVSIX.Commands
@@ -8,15 +7,14 @@ namespace GitExtensionsVSIX.Commands
     {
         public readonly CommandBase BaseCommand;
 
-        public VsixCommandBase(CommandBase aBaseCommand)
+        public VsixCommandBase(CommandBase baseCommand)
         {
-            BaseCommand = aBaseCommand;
+            BaseCommand = baseCommand;
         }
 
-        virtual public void BeforeQueryStatus(DTE2 application, OleMenuCommand menuCommand)
+        public virtual void BeforeQueryStatus(_DTE application, OleMenuCommand menuCommand)
         {
             menuCommand.Enabled = BaseCommand.IsEnabled(application);
         }
-
     }
 }

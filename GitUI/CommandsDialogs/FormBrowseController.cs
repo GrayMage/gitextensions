@@ -1,6 +1,7 @@
 ﻿using System.Threading.Tasks;
 using GitCommands;
 using GitCommands.Gpg;
+using JetBrains.Annotations;
 
 namespace GitUI.CommandsDialogs
 {
@@ -13,13 +14,12 @@ namespace GitUI.CommandsDialogs
     {
         private readonly IGitGpgController _gitGpgController;
 
-
         public FormBrowseController(IGitGpgController gitGpgController)
         {
             _gitGpgController = gitGpgController;
         }
 
-
+        [ItemCanBeNull]
         public async Task<GpgInfo> LoadGpgInfoAsync(GitRevision revision)
         {
             if (!AppSettings.ShowGpgInformation.ValueOrDefault || string.IsNullOrWhiteSpace(revision?.Guid))
@@ -41,7 +41,7 @@ namespace GitUI.CommandsDialogs
             }
 
             return new GpgInfo(commitStatus,
-                               _gitGpgController.GetCommitVerificationMessage(revision), 
+                               _gitGpgController.GetCommitVerificationMessage(revision),
                                tagStatus,
                                _gitGpgController.GetTagVerifyMessage(revision));
         }

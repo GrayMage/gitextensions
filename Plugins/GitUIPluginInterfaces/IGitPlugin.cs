@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using System.Drawing;
+using JetBrains.Annotations;
 
 namespace GitUIPluginInterfaces
 {
@@ -8,6 +10,9 @@ namespace GitUIPluginInterfaces
 
         string Description { get; }
 
+        [CanBeNull]
+        Image Icon { get; }
+
         IGitPluginSettingsContainer SettingsContainer { get; set; }
 
         IEnumerable<ISetting> GetSettings();
@@ -16,6 +21,6 @@ namespace GitUIPluginInterfaces
 
         void Unregister(IGitUICommands gitUiCommands);
 
-        bool Execute(GitUIBaseEventArgs gitUiCommands);
+        bool Execute(GitUIEventArgs args);
     }
 }

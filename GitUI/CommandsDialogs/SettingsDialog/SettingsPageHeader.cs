@@ -1,16 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
-using System.Linq;
-using System.Text;
 using System.Windows.Forms;
-using ResourceManager;
 
 namespace GitUI.CommandsDialogs.SettingsDialog
 {
-
     public interface IGlobalSettingsPage : ISettingsPage
     {
         void SetGlobalSettings();
@@ -28,29 +20,29 @@ namespace GitUI.CommandsDialogs.SettingsDialog
         void SetRepoDistSettings();
     }
 
-    public partial class SettingsPageHeader : GitExtensionsControl
+    public partial class SettingsPageHeader
     {
-        private readonly SettingsPageWithHeader _Page;
+        private readonly SettingsPageWithHeader _page;
 
-        public SettingsPageHeader(SettingsPageWithHeader aPage)
+        public SettingsPageHeader(SettingsPageWithHeader page)
         {
             InitializeComponent();
-            Translate();
+            InitializeComplete();
 
-            if (aPage != null)
+            label1.Font = new System.Drawing.Font(label1.Font, System.Drawing.FontStyle.Bold);
+
+            if (page != null)
             {
-                settingsPagePanel.Controls.Add(aPage);
-                aPage.Dock = DockStyle.Fill;
-                _Page = aPage;
+                settingsPagePanel.Controls.Add(page);
+                page.Dock = DockStyle.Fill;
+                _page = page;
                 ConfigureHeader();
             }
         }
 
         private void ConfigureHeader()
         {
-            ILocalSettingsPage localSettings = _Page as ILocalSettingsPage;
-
-            if (localSettings == null)
+            if (!(_page is ILocalSettingsPage localSettings))
             {
                 GlobalRB.Checked = true;
 
@@ -90,9 +82,7 @@ namespace GitUI.CommandsDialogs.SettingsDialog
 
                 EffectiveRB.Checked = true;
 
-                IRepoDistSettingsPage repoDistPage = localSettings as IRepoDistSettingsPage;
-
-                if (repoDistPage == null)
+                if (!(localSettings is IRepoDistSettingsPage repoDistPage))
                 {
                     DistributedRB.Visible = false;
                     arrow3.Visible = false;
@@ -107,16 +97,14 @@ namespace GitUI.CommandsDialogs.SettingsDialog
                         }
                     };
                 }
-
             }
-
         }
 
         private void GlobalRB_CheckedChanged(object sender, EventArgs e)
         {
             if (GlobalRB.Checked)
             {
-                _Page.SetGlobalSettings();
+                _page.SetGlobalSettings();
             }
         }
     }

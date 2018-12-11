@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Windows.Forms;
+using JetBrains.Annotations;
 using ResourceManager;
 
 namespace GitUI.CommandsDialogs
@@ -12,19 +13,30 @@ namespace GitUI.CommandsDialogs
         private readonly TranslationString _cannotOpenFile = new TranslationString("Cannot open file:");
         private readonly TranslationString _cannotSaveFile = new TranslationString("Cannot save file:");
         private readonly TranslationString _error = new TranslationString("Error");
-        private bool _hasChanges;
-        private string _fileName;
-        private bool _formClosing = false;
 
-        public FormEditor(GitUICommands aCommands, string fileName, bool showWarning)
-            : base(aCommands)
+        [CanBeNull] private readonly string _fileName;
+
+        private bool _hasChanges;
+
+        [Obsolete("For VS designer and translation test only. Do not remove.")]
+        private FormEditor()
         {
             InitializeComponent();
-            Translate();
+        }
+
+        public FormEditor([NotNull] GitUICommands commands, [CanBeNull] string fileName, bool showWarning)
+            : base(commands)
+        {
+            _fileName = fileName;
+            InitializeComponent();
+            InitializeComplete();
 
             // for translation form
-            if (fileName != null)
-                OpenFile(fileName);
+            if (_fileName != null)
+            {
+                OpenFile();
+            }
+
             fileViewer.TextChanged += (s, e) => HasChanges = true;
             fileViewer.TextLoaded += (s, e) => HasChanges = false;
             panelMessage.Visible = showWarning;
@@ -40,12 +52,11 @@ namespace GitUI.CommandsDialogs
             }
         }
 
-        private void OpenFile(string fileName)
+        private void OpenFile()
         {
             try
             {
-                _fileName = fileName;
-                fileViewer.ViewFile(_fileName);
+                fileViewer.ViewFileAsync(_fileName);
                 fileViewer.IsReadOnly = false;
                 fileViewer.SetVisibilityDiffContextMenu(false, false);
                 Text = _fileName;
@@ -56,20 +67,12 @@ namespace GitUI.CommandsDialogs
             catch (Exception ex)
             {
                 MessageBox.Show(this, _cannotOpenFile.Text + Environment.NewLine + ex.Message, _error.Text);
-                _fileName = string.Empty;
                 Close();
             }
         }
 
         private void FormEditor_FormClosing(object sender, FormClosingEventArgs e)
         {
-            // prevent recursive calls to this method when setting DialogResult
-            // due to Mono bug https://bugzilla.xamarin.com/show_bug.cgi?id=5040
-            if(_formClosing)
-            {
-                return;
-            }
-
             // only offer to save if there's something to save.
             if (HasChanges)
             {
@@ -90,21 +93,19 @@ namespace GitUI.CommandsDialogs
                                 return;
                             }
                         }
-                        _formClosing = true;
+
                         DialogResult = DialogResult.OK;
                         break;
                     case DialogResult.Cancel:
                         e.Cancel = true;
                         return;
                     default:
-                        _formClosing = true;
                         DialogResult = DialogResult.Cancel;
                         break;
                 }
             }
             else
             {
-                _formClosing = true;
                 DialogResult = DialogResult.OK;
             }
         }

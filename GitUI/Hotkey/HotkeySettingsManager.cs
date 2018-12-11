@@ -5,73 +5,72 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Xml.Serialization;
+using GitCommands;
 using GitUI.CommandsDialogs;
 using GitUI.Editor;
+using GitUI.Script;
+using JetBrains.Annotations;
 using ResourceManager;
-using GitCommands;
 
 namespace GitUI.Hotkey
 {
-    class HotkeySettingsManager
+    internal static class HotkeySettingsManager
     {
         #region Serializer
-        private static XmlSerializer _Serializer;
+        private static XmlSerializer _serializer;
+
         /// <summary>Lazy-loaded Serializer for HotkeySettings[]</summary>
         private static XmlSerializer Serializer
         {
             get
             {
-                if (_Serializer == null)
-                    _Serializer = new XmlSerializer(typeof(HotkeySettings[]), new[] { typeof(HotkeyCommand) });
-                return _Serializer;
+                if (_serializer == null)
+                {
+                    _serializer = new XmlSerializer(typeof(HotkeySettings[]), new[] { typeof(HotkeyCommand) });
+                }
+
+                return _serializer;
             }
         }
         #endregion
 
-        private static List<Keys> UsedKeys = new List<Keys>();
+        private static readonly HashSet<Keys> _usedKeys = new HashSet<Keys>();
 
         /// <summary>
         /// Returns whether the hotkey is already assigned.
         /// </summary>
-        /// <param name="keyData"></param>
-        /// <returns></returns>
         public static bool IsUniqueKey(Keys keyData)
         {
-            return UsedKeys.Contains(keyData);
+            return _usedKeys.Contains(keyData);
         }
 
         public static HotkeyCommand[] LoadHotkeys(string name)
         {
-            //var settings = LoadSettings().FirstOrDefault(s => s.Name == name);
-            HotkeySettings[] allSettings;
-            HotkeySettings settings = new HotkeySettings();
-            HotkeySettings scriptkeys = new HotkeySettings();
-            allSettings = LoadSettings();
+            var settings = new HotkeySettings();
+            var scriptKeys = new HotkeySettings();
+            var allSettings = LoadSettings();
 
-            GetUsedHotkeys(allSettings);
+            UpdateUsedKeys(allSettings);
 
-            foreach(HotkeySettings hs in allSettings)
+            foreach (var setting in allSettings)
             {
-                if(hs.Name == name)
-                    settings = hs;
-                if(hs.Name == "Scripts")
-                    scriptkeys = hs;
+                if (setting.Name == name)
+                {
+                    settings = setting;
+                }
+
+                if (setting.Name == "Scripts")
+                {
+                    scriptKeys = setting;
+                }
             }
 
-            //HotkeyCommand[] scriptkeys = LoadSettings().FirstOrDefault(s => s.Name == name);
+            // append general hotkeys to every form
+            var allKeys = new HotkeyCommand[settings.Commands.Length + scriptKeys.Commands.Length];
+            settings.Commands.CopyTo(allKeys, 0);
+            scriptKeys.Commands.CopyTo(allKeys, settings.Commands.Length);
 
-            if(settings != null) {
-                //append general hotkeys to every form
-                //HotkeyCommand[] scriptkeys = LoadScriptHotkeys();
-                HotkeyCommand[] allkeys = new HotkeyCommand[settings.Commands.Length + scriptkeys.Commands.Length];
-                settings.Commands.CopyTo(allkeys,0);
-                scriptkeys.Commands.CopyTo(allkeys,settings.Commands.Length);
-
-                return allkeys;
-            }
-
-            //return settings != null ? settings.Commands : null;
-            return null;
+            return allKeys;
         }
 
         public static HotkeySettings[] LoadSettings()
@@ -85,20 +84,20 @@ namespace GitUI.Hotkey
             return defaultSettings;
         }
 
-        private static void GetUsedHotkeys(HotkeySettings[] settings)
+        private static void UpdateUsedKeys(HotkeySettings[] settings)
         {
-            UsedKeys.Clear();
-            foreach (HotkeySettings hs in settings)
-            {
-                for (int i = 0; i < hs.Commands.Length; i++)
-                {
-                    HotkeyCommand hotkeyCommand = hs.Commands[i];
+            _usedKeys.Clear();
 
-                    if (hotkeyCommand != null && !UsedKeys.Contains(hotkeyCommand.KeyData))
-                        UsedKeys.Add(hotkeyCommand.KeyData);
+            foreach (var setting in settings)
+            {
+                foreach (var command in setting.Commands)
+                {
+                    if (command != null)
+                    {
+                        _usedKeys.Add(command.KeyData);
+                    }
                 }
             }
-            //MessageBox.Show(UsedKeys.Count.ToString());
         }
 
         /// <summary>Serializes and saves the supplied settings</summary>
@@ -106,16 +105,19 @@ namespace GitUI.Hotkey
         {
             try
             {
-                GetUsedHotkeys(settings);
+                UpdateUsedKeys(settings);
 
-                StringBuilder strBuilder = new StringBuilder();
-                using (StringWriter writer = new StringWriter(strBuilder))
+                var str = new StringBuilder();
+                using (var writer = new StringWriter(str))
                 {
                     Serializer.Serialize(writer, settings);
-                    AppSettings.SerializedHotkeys = strBuilder.ToString();
+                    AppSettings.SerializedHotkeys = str.ToString();
                 }
             }
-            catch { }
+            catch
+            {
+                // ignore
+            }
         }
 
         internal static void MergeIntoDefaultSettings(HotkeySettings[] defaultSettings, HotkeySettings[] loadedSettings)
@@ -125,79 +127,77 @@ namespace GitUI.Hotkey
                 return;
             }
 
-            Dictionary<string, HotkeyCommand> defaultCommands = new Dictionary<string, HotkeyCommand>();
-            FillDictionaryWithCommands(defaultCommands, defaultSettings);
-            AssignHotkeysFromLoaded(defaultCommands, loadedSettings);
-        }
+            var defaultCommands = new Dictionary<string, HotkeyCommand>();
 
-        private static void AssignHotkeysFromLoaded(Dictionary<string, HotkeyCommand> defaultCommands, HotkeySettings[] loadedSettings)
-        {
-            foreach (HotkeySettings setting in loadedSettings)
+            FillDictionaryWithCommands();
+            AssignHotkeysFromLoaded();
+
+            void AssignHotkeysFromLoaded()
             {
-                if (setting != null)
+                foreach (var setting in loadedSettings)
                 {
-                    foreach (HotkeyCommand command in setting.Commands)
+                    if (setting != null)
                     {
-                        if (command != null)
+                        foreach (var command in setting.Commands)
                         {
-                            string dictKey = CalcDictionaryKey(setting.Name, command.CommandCode);
-                            HotkeyCommand defaultCommand;
-                            if (defaultCommands.TryGetValue(dictKey, out defaultCommand))
+                            if (command != null)
                             {
-                                defaultCommand.KeyData = command.KeyData;
+                                string dictKey = CalcDictionaryKey(setting.Name, command.CommandCode);
+                                if (defaultCommands.TryGetValue(dictKey, out var defaultCommand))
+                                {
+                                    defaultCommand.KeyData = command.KeyData;
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        private static void FillDictionaryWithCommands(Dictionary<string, HotkeyCommand> dict, HotkeySettings[] settings)
-        {
-            foreach(HotkeySettings setting in settings)
+            void FillDictionaryWithCommands()
             {
-                foreach (HotkeyCommand command in setting.Commands)
+                foreach (var setting in defaultSettings)
                 {
-                    if (command != null)
+                    foreach (var command in setting.Commands)
                     {
-                        string dictKey = CalcDictionaryKey(setting.Name, command.CommandCode);
-                        dict.Add(dictKey, command);
+                        if (command != null)
+                        {
+                            string dictKey = CalcDictionaryKey(setting.Name, command.CommandCode);
+                            defaultCommands.Add(dictKey, command);
+                        }
                     }
                 }
             }
+
+            string CalcDictionaryKey(string settingName, int commandCode) => settingName + ":" + commandCode;
         }
 
-        private static string CalcDictionaryKey(String settingName, int commandCode)
-        {
-            return settingName + ":" + commandCode;
-        }
-
+        [CanBeNull]
         private static HotkeySettings[] LoadSerializedSettings()
         {
-            HotkeySettings[] settings = null;
-
             MigrateSettings();
 
             if (!string.IsNullOrWhiteSpace(AppSettings.SerializedHotkeys))
-                settings = LoadSerializedSettings(AppSettings.SerializedHotkeys);
+            {
+                return LoadSerializedSettings(AppSettings.SerializedHotkeys);
+            }
 
-            return settings;
+            return null;
         }
 
+        [CanBeNull]
         private static HotkeySettings[] LoadSerializedSettings(string serializedHotkeys)
         {
-            HotkeySettings[] settings = null;
-
             try
             {
-                using (StringReader reader = new StringReader(serializedHotkeys))
+                using (var reader = new StringReader(serializedHotkeys))
                 {
-                    settings = Serializer.Deserialize(reader) as HotkeySettings[];
+                    return (HotkeySettings[])Serializer.Deserialize(reader);
                 }
             }
-            catch { }
-
-            return settings;
+            catch
+            {
+                return null;
+            }
         }
 
         private static void MigrateSettings()
@@ -210,7 +210,7 @@ namespace GitUI.Hotkey
                     HotkeySettings[] settings = LoadSerializedSettings(Properties.Settings.Default.Hotkeys);
                     if (settings == null)
                     {
-                        AppSettings.SerializedHotkeys = " ";//mark settings as migrated
+                        AppSettings.SerializedHotkeys = " "; // mark settings as migrated
                     }
                     else
                     {
@@ -219,119 +219,160 @@ namespace GitUI.Hotkey
                 }
                 else
                 {
-                    AppSettings.SerializedHotkeys = " ";//mark settings as migrated
+                    AppSettings.SerializedHotkeys = " "; // mark settings as migrated
                 }
             }
         }
 
-        /// <summary>Asks the IHotkeyables to create their default hotkey settings</summary>
         public static HotkeySettings[] CreateDefaultSettings()
         {
-            Func<object, Keys, HotkeyCommand> hk = (en, k) => new HotkeyCommand((int)en, en.ToString()) { KeyData = k };
+            HotkeyCommand Hk(object en, Keys k) => new HotkeyCommand((int)en, en.ToString()) { KeyData = k };
 
-            HotkeyCommand[] scriptsHotkeys = LoadScriptHotkeys();
-
+            const Keys OpenWithDifftoolHotkey = Keys.F3;
+            const Keys OpenAsTempFileHotkey = Keys.Control | Keys.F3;
+            const Keys OpenAsTempFileWithHotkey = Keys.Shift | Keys.Control | Keys.F3;
+            const Keys EditFileHotkey = Keys.F4;
+            const Keys OpenFileHotkey = Keys.Shift | Keys.F4;
+            const Keys OpenFileWithHotkey = Keys.Shift | Keys.Control | Keys.F4;
+            const Keys ShowHistoryHotkey = Keys.H;
+            const Keys BlameHotkey = Keys.B;
 
             return new[]
-              {
+            {
+                new HotkeySettings(
+                    FormCommit.HotkeySettingsName,
+                    Hk(FormCommit.Command.AddToGitIgnore, Keys.None),
+                    Hk(FormCommit.Command.DeleteSelectedFiles, Keys.Delete),
+                    Hk(FormCommit.Command.EditFile, EditFileHotkey),
+                    Hk(FormCommit.Command.FocusUnstagedFiles, Keys.Control | Keys.D1),
+                    Hk(FormCommit.Command.FocusSelectedDiff, Keys.Control | Keys.D2),
+                    Hk(FormCommit.Command.FocusStagedFiles, Keys.Control | Keys.D3),
+                    Hk(FormCommit.Command.FocusCommitMessage, Keys.Control | Keys.D4),
+                    Hk(FormCommit.Command.OpenFile, OpenFileHotkey),
+                    Hk(FormCommit.Command.OpenFileWith, OpenFileWithHotkey),
+                    Hk(FormCommit.Command.OpenWithDifftool, OpenWithDifftoolHotkey),
+                    Hk(FormCommit.Command.ResetSelectedFiles, Keys.R),
+                    Hk(FormCommit.Command.StageSelectedFile, Keys.S),
+                    Hk(FormCommit.Command.UnStageSelectedFile, Keys.U),
+                    Hk(FormCommit.Command.ShowHistory, ShowHistoryHotkey),
+                    Hk(FormCommit.Command.StageAll, Keys.Control | Keys.S),
+                    Hk(FormCommit.Command.ToggleSelectionFilter, Keys.Control | Keys.F)),
+                new HotkeySettings(
+                    FormBrowse.HotkeySettingsName,
+                    Hk(FormBrowse.Command.AddNotes, Keys.Control | Keys.Shift | Keys.N),
+                    Hk(FormBrowse.Command.CheckoutBranch, Keys.Control | Keys.Decimal),
+                    Hk(FormBrowse.Command.CloseRepository, Keys.Control | Keys.W),
+                    Hk(FormBrowse.Command.Commit, Keys.Control | Keys.Space),
+                    Hk(FormBrowse.Command.EditFile, EditFileHotkey),
+                    Hk(FormBrowse.Command.FindFileInSelectedCommit, Keys.Control | Keys.Shift | Keys.F),
+                    Hk(FormBrowse.Command.FocusBranchTree, Keys.Control | Keys.D0),
+                    Hk(FormBrowse.Command.FocusRevisionGrid, Keys.Control | Keys.D1),
+                    Hk(FormBrowse.Command.FocusCommitInfo, Keys.Control | Keys.D2),
+                    Hk(FormBrowse.Command.FocusDiff, Keys.Control | Keys.D3),
+                    Hk(FormBrowse.Command.FocusFileTree, Keys.Control | Keys.D4),
+                    Hk(FormBrowse.Command.FocusGpgInfo, Keys.Control | Keys.D5),
+                    Hk(FormBrowse.Command.FocusGitConsole, Keys.Control | Keys.D6),
+                    Hk(FormBrowse.Command.FocusBuildServerStatus, Keys.Control | Keys.D7),
+                    Hk(FormBrowse.Command.FocusNextTab, Keys.Control | Keys.Tab),
+                    Hk(FormBrowse.Command.FocusPrevTab, Keys.Control | Keys.Shift | Keys.Tab),
+                    Hk(FormBrowse.Command.FocusFilter, Keys.Control | Keys.E),
+                    Hk(FormBrowse.Command.GitBash, Keys.Control | Keys.G),
+                    Hk(FormBrowse.Command.GitGui, Keys.None),
+                    Hk(FormBrowse.Command.GitGitK, Keys.None),
+                    Hk(FormBrowse.Command.GoToSubmodule, Keys.None),
+                    Hk(FormBrowse.Command.GoToSuperproject, Keys.None),
+                    Hk(FormBrowse.Command.OpenAsTempFile, OpenAsTempFileHotkey),
+                    Hk(FormBrowse.Command.OpenAsTempFileWith, OpenAsTempFileWithHotkey),
+                    Hk(FormBrowse.Command.OpenSettings, Keys.Control | Keys.Oemcomma),
+                    Hk(FormBrowse.Command.OpenWithDifftool, OpenWithDifftoolHotkey),
+                    Hk(FormBrowse.Command.QuickFetch, Keys.Control | Keys.Shift | Keys.Down),
+                    Hk(FormBrowse.Command.QuickPull, Keys.Control | Keys.Shift | Keys.P),
+                    Hk(FormBrowse.Command.QuickPush, Keys.Control | Keys.Shift | Keys.Up),
+                    Hk(FormBrowse.Command.Stash, Keys.Control | Keys.Alt | Keys.Up),
+                    Hk(FormBrowse.Command.StashPop, Keys.Control | Keys.Alt | Keys.Down),
+                    Hk(FormBrowse.Command.ToggleBranchTreePanel, Keys.Control | Keys.Alt | Keys.C)),
+                new HotkeySettings(
+                    RevisionGridControl.HotkeySettingsName,
+                    Hk(RevisionGridControl.Commands.CompareSelectedCommits, Keys.None),
+                    Hk(RevisionGridControl.Commands.CompareToBase, Keys.Control | Keys.R),
+                    Hk(RevisionGridControl.Commands.CompareToBranch, Keys.None),
+                    Hk(RevisionGridControl.Commands.CompareToCurrentBranch, Keys.None),
+                    Hk(RevisionGridControl.Commands.CompareToWorkingDirectory, Keys.Control | Keys.D),
+                    Hk(RevisionGridControl.Commands.CreateFixupCommit, Keys.Control | Keys.X),
+                    Hk(RevisionGridControl.Commands.GoToCommit, Keys.Control | Keys.Shift | Keys.G),
+                    Hk(RevisionGridControl.Commands.GoToParent, Keys.Control | Keys.P),
+                    Hk(RevisionGridControl.Commands.GoToChild, Keys.Control | Keys.N),
+                    Hk(RevisionGridControl.Commands.NextQuickSearch, Keys.Alt | Keys.Down),
+                    Hk(RevisionGridControl.Commands.PrevQuickSearch, Keys.Alt | Keys.Up),
+                    Hk(RevisionGridControl.Commands.RevisionFilter, Keys.Control | Keys.F),
+                    Hk(RevisionGridControl.Commands.SelectCurrentRevision, Keys.Control | Keys.Shift | Keys.C),
+                    Hk(RevisionGridControl.Commands.SelectAsBaseToCompare, Keys.Control | Keys.L),
+                    Hk(RevisionGridControl.Commands.ShowAllBranches, Keys.Control | Keys.Shift | Keys.A),
+                    Hk(RevisionGridControl.Commands.ShowCurrentBranchOnly, Keys.Control | Keys.Shift | Keys.U),
+                    Hk(RevisionGridControl.Commands.ShowFilteredBranches, Keys.Control | Keys.Shift | Keys.T),
+                    Hk(RevisionGridControl.Commands.ShowFirstParent, Keys.Control | Keys.Shift | Keys.S),
+                    Hk(RevisionGridControl.Commands.ShowRemoteBranches, Keys.Control | Keys.Shift | Keys.R),
+                    Hk(RevisionGridControl.Commands.ToggleRevisionGraph, Keys.None),
+                    Hk(RevisionGridControl.Commands.ToggleAuthorDateCommitDate, Keys.None),
+                    Hk(RevisionGridControl.Commands.ToggleOrderRevisionsByDate, Keys.None),
+                    Hk(RevisionGridControl.Commands.ToggleShowRelativeDate, Keys.None),
+                    Hk(RevisionGridControl.Commands.ToggleDrawNonRelativesGray, Keys.None),
+                    Hk(RevisionGridControl.Commands.ToggleShowGitNotes, Keys.None),
+                    Hk(RevisionGridControl.Commands.ToggleShowMergeCommits, Keys.Control | Keys.Shift | Keys.M),
+                    Hk(RevisionGridControl.Commands.ToggleShowTags, Keys.Control | Keys.Alt | Keys.T),
+                    Hk(RevisionGridControl.Commands.ToggleHighlightSelectedBranch, Keys.Control | Keys.Shift | Keys.B)),
+                new HotkeySettings(
+                    FileViewer.HotkeySettingsName,
+                    Hk(FileViewer.Commands.Find, Keys.Control | Keys.F),
+                    Hk(FileViewer.Commands.FindNextOrOpenWithDifftool, OpenWithDifftoolHotkey),
+                    Hk(FileViewer.Commands.FindPrevious, Keys.Shift | OpenWithDifftoolHotkey),
+                    Hk(FileViewer.Commands.GoToLine, Keys.Control | Keys.G),
+                    Hk(FileViewer.Commands.IncreaseNumberOfVisibleLines, Keys.None),
+                    Hk(FileViewer.Commands.DecreaseNumberOfVisibleLines, Keys.None),
+                    Hk(FileViewer.Commands.NextChange, Keys.Alt | Keys.Down),
+                    Hk(FileViewer.Commands.PreviousChange, Keys.Alt | Keys.Up),
+                    Hk(FileViewer.Commands.ShowEntireFile, Keys.None),
+                    Hk(FileViewer.Commands.TreatFileAsText, Keys.None)),
+                new HotkeySettings(
+                    FormResolveConflicts.HotkeySettingsName,
+                    Hk(FormResolveConflicts.Commands.ChooseBase, Keys.B),
+                    Hk(FormResolveConflicts.Commands.ChooseLocal, Keys.L),
+                    Hk(FormResolveConflicts.Commands.ChooseRemote, Keys.R),
+                    Hk(FormResolveConflicts.Commands.Merge, Keys.M),
+                    Hk(FormResolveConflicts.Commands.Rescan, Keys.F5)),
+                new HotkeySettings(
+                    RevisionDiffControl.HotkeySettingsName,
+                    Hk(RevisionDiffControl.Command.Blame, BlameHotkey),
+                    Hk(RevisionDiffControl.Command.DeleteSelectedFiles, Keys.Delete),
+                    Hk(RevisionDiffControl.Command.EditFile, EditFileHotkey),
+                    Hk(RevisionDiffControl.Command.OpenWithDifftool, OpenWithDifftoolHotkey),
+                    Hk(RevisionDiffControl.Command.ShowHistory, ShowHistoryHotkey)),
+                new HotkeySettings(
+                    RevisionFileTreeControl.HotkeySettingsName,
+                    Hk(RevisionFileTreeControl.Command.Blame, BlameHotkey),
+                    Hk(RevisionFileTreeControl.Command.EditFile, EditFileHotkey),
+                    Hk(RevisionFileTreeControl.Command.OpenAsTempFile, OpenAsTempFileHotkey),
+                    Hk(RevisionFileTreeControl.Command.OpenAsTempFileWith, OpenAsTempFileWithHotkey),
+                    Hk(RevisionFileTreeControl.Command.OpenWithDifftool, OpenWithDifftoolHotkey),
+                    Hk(RevisionFileTreeControl.Command.ShowHistory, ShowHistoryHotkey)),
+                new HotkeySettings(
+                    FormSettings.HotkeySettingsName,
+                    LoadScriptHotkeys())
+            };
 
-                // FormCommit
-                new HotkeySettings(FormCommit.HotkeySettingsName,
-                    hk(FormCommit.Commands.AddToGitIgnore, Keys.None),
-                    hk(FormCommit.Commands.DeleteSelectedFiles, Keys.Delete),
-                    hk(FormCommit.Commands.FocusUnstagedFiles, Keys.Control | Keys.D1),
-                    hk(FormCommit.Commands.FocusSelectedDiff, Keys.Control | Keys.D2),
-                    hk(FormCommit.Commands.FocusStagedFiles, Keys.Control | Keys.D3),
-                    hk(FormCommit.Commands.FocusCommitMessage, Keys.Control | Keys.D4),
-                    hk(FormCommit.Commands.ResetSelectedFiles, Keys.R),
-                    hk(FormCommit.Commands.StageSelectedFile, Keys.S),
-                    hk(FormCommit.Commands.UnStageSelectedFile, Keys.U),
-                    hk(FormCommit.Commands.ShowHistory, Keys.H),
-                    hk(FormCommit.Commands.ToggleSelectionFilter, Keys.Control | Keys.F),
-                    hk(FormCommit.Commands.StageAll, Keys.Control | Keys.S)),
-                new HotkeySettings(FormBrowse.HotkeySettingsName,
-                    hk(FormBrowse.Commands.GitBash, Keys.Control | Keys.G),
-                    hk(FormBrowse.Commands.GitGui, Keys.None),
-                    hk(FormBrowse.Commands.GitGitK, Keys.None),
-                    hk(FormBrowse.Commands.FocusRevisionGrid, Keys.Control | Keys.D1),
-                    hk(FormBrowse.Commands.FocusCommitInfo, Keys.Control | Keys.D2),
-                    hk(FormBrowse.Commands.FocusFileTree, Keys.Control | Keys.D3),
-                    hk(FormBrowse.Commands.FocusDiff, Keys.Control | Keys.D4),
-                    hk(FormBrowse.Commands.Commit, Keys.Control | Keys.Space),
-                    hk(FormBrowse.Commands.AddNotes, Keys.Control | Keys.Shift | Keys.N),
-                    hk(FormBrowse.Commands.FindFileInSelectedCommit, Keys.Control | Keys.Shift | Keys.F),
-                    hk(FormBrowse.Commands.CheckoutBranch, Keys.Control | Keys.Decimal),
-                    hk(FormBrowse.Commands.QuickFetch, Keys.Control | Keys.Shift | Keys.Down),
-                    hk(FormBrowse.Commands.QuickPull, Keys.Control | Keys.Shift | Keys.P),
-                    hk(FormBrowse.Commands.QuickPush, Keys.Control | Keys.Shift | Keys.Up),
-                    hk(FormBrowse.Commands.Stash, Keys.Control | Keys.Alt | Keys.Up),
-                    hk(FormBrowse.Commands.StashPop, Keys.Control | Keys.Alt | Keys.Down),
-                    hk(FormBrowse.Commands.CloseRepository, Keys.Control | Keys.W),
-                    hk(FormBrowse.Commands.RotateApplicationIcon, Keys.Control | Keys.Shift | Keys.I)),
-                new HotkeySettings(RevisionGrid.HotkeySettingsName,
-                    hk(RevisionGrid.Commands.RevisionFilter, Keys.Control | Keys.F),
-                    hk(RevisionGrid.Commands.ToggleRevisionGraph, Keys.None),
-                    hk(RevisionGrid.Commands.ToggleAuthorDateCommitDate, Keys.None),
-                    hk(RevisionGrid.Commands.ToggleOrderRevisionsByDate, Keys.None),
-                    hk(RevisionGrid.Commands.ToggleShowRelativeDate, Keys.None),
-                    hk(RevisionGrid.Commands.ToggleDrawNonRelativesGray, Keys.None),
-                    hk(RevisionGrid.Commands.ToggleShowGitNotes, Keys.None),
-                    hk(RevisionGrid.Commands.ToggleRevisionCardLayout, Keys.Control | Keys.Shift | Keys.L),
-                    hk(RevisionGrid.Commands.ToggleShowMergeCommits, Keys.Control | Keys.Shift | Keys.M),
-                    hk(RevisionGrid.Commands.ToggleShowTags, Keys.Control | Keys.Alt | Keys.T),
-                    hk(RevisionGrid.Commands.ShowAllBranches, Keys.Control | Keys.Shift | Keys.A),
-                    hk(RevisionGrid.Commands.ShowCurrentBranchOnly, Keys.Control | Keys.Shift | Keys.U),
-                    hk(RevisionGrid.Commands.ShowFilteredBranches, Keys.Control | Keys.Shift | Keys.T),
-                    hk(RevisionGrid.Commands.ShowRemoteBranches, Keys.Control | Keys.Shift | Keys.R),
-                    hk(RevisionGrid.Commands.ShowFirstParent, Keys.Control | Keys.Shift | Keys.S),
-                    hk(RevisionGrid.Commands.GoToParent, Keys.Control | Keys.P),
-                    hk(RevisionGrid.Commands.GoToChild, Keys.Control | Keys.N),
-                    hk(RevisionGrid.Commands.ToggleHighlightSelectedBranch, Keys.Control | Keys.Shift | Keys.B),
-                    hk(RevisionGrid.Commands.NextQuickSearch, Keys.Alt | Keys.Down),
-                    hk(RevisionGrid.Commands.PrevQuickSearch, Keys.Alt | Keys.Up),
-                    hk(RevisionGrid.Commands.SelectCurrentRevision, Keys.Control | Keys.Shift | Keys.C),
-                    hk(RevisionGrid.Commands.SelectAsBaseToCompare, Keys.Control | Keys.L),
-                    hk(RevisionGrid.Commands.CompareToBase, Keys.Control | Keys.R),
-                    hk(RevisionGrid.Commands.GoToCommit, Keys.Control | Keys.Shift | Keys.G),
-                    hk(RevisionGrid.Commands.CreateFixupCommit, Keys.Control | Keys.X)),
-                new HotkeySettings(FileViewer.HotkeySettingsName,
-                    hk(FileViewer.Commands.Find, Keys.Control | Keys.F),
-                    hk(FileViewer.Commands.GoToLine, Keys.Control | Keys.G),
-                    hk(FileViewer.Commands.IncreaseNumberOfVisibleLines, Keys.None),
-                    hk(FileViewer.Commands.DecreaseNumberOfVisibleLines, Keys.None),
-                    hk(FileViewer.Commands.ShowEntireFile, Keys.None),
-                    hk(FileViewer.Commands.TreatFileAsText, Keys.None),
-                    hk(FileViewer.Commands.NextChange, Keys.Alt | Keys.Down),
-                    hk(FileViewer.Commands.PreviousChange, Keys.Alt | Keys.Up)),
-                new HotkeySettings(FormResolveConflicts.HotkeySettingsName,
-                    hk(FormResolveConflicts.Commands.ChooseBase, Keys.B),
-                    hk(FormResolveConflicts.Commands.ChooseLocal, Keys.L),
-                    hk(FormResolveConflicts.Commands.ChooseRemote, Keys.R),
-                    hk(FormResolveConflicts.Commands.Merge, Keys.M),
-                    hk(FormResolveConflicts.Commands.Rescan, Keys.F5)),
-                new HotkeySettings(RevisionDiff.HotkeySettingsName,
-                    hk(RevisionDiff.Commands.DeleteSelectedFiles, Keys.Delete)),
-                new HotkeySettings(FormSettings.HotkeySettingsName,
-                    scriptsHotkeys)
-              };
+            HotkeyCommand[] LoadScriptHotkeys()
+            {
+                /* define unusable int for identifying a shortcut for a custom script is pressed
+                 * all integers above 9000 represent a script hotkey
+                 * these integers are never matched in the 'switch' routine on a form and
+                 * therefore execute the 'default' action
+                 */
+                return ScriptManager
+                    .GetScripts()
+                    .Where(s => !s.Name.IsNullOrEmpty())
+                    .Select(s => new HotkeyCommand(s.HotkeyCommandIdentifier, s.Name) { KeyData = Keys.None })
+                    .ToArray();
+            }
         }
-
-        public static HotkeyCommand[] LoadScriptHotkeys()
-        {
-            var curScripts = GitUI.Script.ScriptManager.GetScripts();
-
-            HotkeyCommand[] scriptKeys = new HotkeyCommand[curScripts.Count];
-            /* define unusable int for identifying a shortcut for a custom script is pressed
-             * all integers above 9000 represent a scripthotkey
-             * these integers are never matched in the 'switch' routine on a form and
-             * therefore execute the 'default' action
-             */
-
-            return curScripts.
-                Where(s => !s.Name.IsNullOrEmpty()).
-                Select(s => new HotkeyCommand((int)s.HotkeyCommandIdentifier, s.Name) { KeyData = (Keys.None) }
-            ).ToArray();
-        }
-
     }
 }

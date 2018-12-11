@@ -1,43 +1,49 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.Composition;
+using System.Linq;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using BackgroundFetch.Properties;
+using GitCommands;
 using GitUIPluginInterfaces;
 using ResourceManager;
 
 namespace BackgroundFetch
 {
+    [Export(typeof(IGitPlugin))]
     public class BackgroundFetchPlugin : GitPluginBase, IGitPluginForRepository
     {
         public BackgroundFetchPlugin()
         {
             SetNameAndDescription("Periodic background fetch");
             Translate();
+            Icon = Resources.IconBackgroundFetch;
         }
 
-        private IDisposable cancellationToken;
-        private IGitUICommands currentGitUiCommands;
+        private IDisposable _cancellationToken;
+        private IGitUICommands _currentGitUiCommands;
 
-        private StringSetting GitCommand = new StringSetting("Arguments of git command to run", "fetch --all");
-        private NumberSetting<int> FetchInterval = new NumberSetting<int>("Fetch every (seconds) - set to 0 to disable", 0);
-        private BoolSetting AutoRefresh = new BoolSetting("Refresh view after fetch", false);
-        private BoolSetting FetchAllSubmodules = new BoolSetting("Fetch all submodules", false);
+        private readonly StringSetting _gitCommand = new StringSetting("Arguments of git command to run", "fetch --all");
+        private readonly NumberSetting<int> _fetchInterval = new NumberSetting<int>("Fetch every (seconds) - set to 0 to disable", 0);
+        private readonly BoolSetting _autoRefresh = new BoolSetting("Refresh view after fetch", false);
+        private readonly BoolSetting _fetchAllSubmodules = new BoolSetting("Fetch all submodules", false);
 
         public override IEnumerable<ISetting> GetSettings()
         {
-            //return all settings or introduce implementation based on reflection on GitPluginBase level
-            yield return GitCommand;
-            yield return FetchInterval;
-            yield return AutoRefresh;
-            yield return FetchAllSubmodules;
+            // return all settings or introduce implementation based on reflection on GitPluginBase level
+            yield return _gitCommand;
+            yield return _fetchInterval;
+            yield return _autoRefresh;
+            yield return _fetchAllSubmodules;
         }
 
         public override void Register(IGitUICommands gitUiCommands)
         {
             base.Register(gitUiCommands);
 
-            currentGitUiCommands = gitUiCommands;
-            currentGitUiCommands.PostSettings += OnPostSettings;
+            _currentGitUiCommands = gitUiCommands;
+            _currentGitUiCommands.PostSettings += OnPostSettings;
 
             RecreateObservable();
         }
@@ -51,55 +57,74 @@ namespace BackgroundFetch
         {
             CancelBackgroundOperation();
 
-            int fetchInterval = FetchInterval.ValueOrDefault(Settings);
+            int fetchInterval = _fetchInterval.ValueOrDefault(Settings);
 
-            var gitModule = currentGitUiCommands.GitModule;
+            var gitModule = _currentGitUiCommands.GitModule;
             if (fetchInterval > 0 && gitModule.IsValidGitWorkingDir())
             {
-                cancellationToken =
+                _cancellationToken =
                     Observable.Timer(TimeSpan.FromSeconds(Math.Max(5, fetchInterval)))
-                              .SelectMany(i => {
-                                // if git not runing - start fetch immediately
-                                if (!gitModule.IsRunningGitProcess())
-                                    return Observable.Return(i);
+                              .SelectMany(i =>
+                              {
+                                  // if git not running - start fetch immediately
+                                  if (!gitModule.IsRunningGitProcess())
+                                  {
+                                      return Observable.Return(i);
+                                  }
 
-                                // in other case - every 5 seconds check if git still runnnig
-                                return Observable
-                                    .Interval(TimeSpan.FromSeconds(5))
-                                    .SkipWhile(ii => gitModule.IsRunningGitProcess())
-                                    .FirstAsync()
-                                ;
+                                  // in other case - every 5 seconds check if git still running
+                                  return Observable
+                                      .Interval(TimeSpan.FromSeconds(5))
+                                      .SkipWhile(ii => gitModule.IsRunningGitProcess())
+                                      .FirstAsync()
+                                  ;
                               })
                               .Repeat()
                               .ObserveOn(ThreadPoolScheduler.Instance)
                               .Subscribe(i =>
                                   {
-                                      if (FetchAllSubmodules.ValueOrDefault(Settings))
-                                          currentGitUiCommands.GitCommand("submodule foreach --recursive git fetch --all");
-
-                                      var gitCmd = GitCommand.ValueOrDefault(Settings).Trim();
-                                      var msg = currentGitUiCommands.GitCommand(gitCmd);
-                                      if (AutoRefresh.ValueOrDefault(Settings))
+                                      GitArgumentBuilder args;
+                                      if (_fetchAllSubmodules.ValueOrDefault(Settings))
                                       {
-                                          if (gitCmd.StartsWith("fetch", StringComparison.InvariantCultureIgnoreCase))
+                                        args = new GitArgumentBuilder("submodule")
+                                        {
+                                            "foreach",
+                                            "--recursive",
+                                            "git",
+                                            "fetch",
+                                            "--all"
+                                        };
+
+                                        _currentGitUiCommands.GitModule.RunGitCmd(args);
+                                      }
+
+                                      var gitCmd = _gitCommand.ValueOrDefault(Settings).Trim().SplitBySpace();
+                                      args = new GitArgumentBuilder(gitCmd[0]) { gitCmd.Skip(1) };
+                                      var msg = _currentGitUiCommands.GitModule.RunGitCmd(args);
+                                      if (_autoRefresh.ValueOrDefault(Settings))
+                                      {
+                                          if (gitCmd[0].Equals("fetch", StringComparison.InvariantCultureIgnoreCase))
                                           {
                                               if (msg.Contains("From"))
-                                                  currentGitUiCommands.RepoChangedNotifier.Notify();
+                                              {
+                                                  _currentGitUiCommands.RepoChangedNotifier.Notify();
+                                              }
                                           }
                                           else
-                                              currentGitUiCommands.RepoChangedNotifier.Notify();
+                                          {
+                                              _currentGitUiCommands.RepoChangedNotifier.Notify();
+                                          }
                                       }
-                                  }
-                                  );
+                                  });
             }
         }
 
         private void CancelBackgroundOperation()
         {
-            if (cancellationToken != null)
+            if (_cancellationToken != null)
             {
-                cancellationToken.Dispose();
-                cancellationToken = null;
+                _cancellationToken.Dispose();
+                _cancellationToken = null;
             }
         }
 
@@ -107,18 +132,18 @@ namespace BackgroundFetch
         {
             CancelBackgroundOperation();
 
-            if (currentGitUiCommands != null)
+            if (_currentGitUiCommands != null)
             {
-                currentGitUiCommands.PostSettings -= OnPostSettings;
-                currentGitUiCommands = null;
+                _currentGitUiCommands.PostSettings -= OnPostSettings;
+                _currentGitUiCommands = null;
             }
 
             base.Unregister(gitUiCommands);
         }
 
-        public override bool Execute(GitUIBaseEventArgs gitUiArgs)
+        public override bool Execute(GitUIEventArgs args)
         {
-            gitUiArgs.GitUICommands.StartSettingsDialog(this);
+            args.GitUICommands.StartSettingsDialog(this);
             return false;
         }
     }

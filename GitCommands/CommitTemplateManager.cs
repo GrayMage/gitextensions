@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Abstractions;
 using System.Linq;
@@ -49,7 +48,6 @@ namespace GitCommands
         private readonly IGitModule _module;
         private readonly IFullPathResolver _fullPathResolver;
 
-
         public CommitTemplateManager(IGitModule module, IFullPathResolver fullPathResolver, IFileSystem fileSystem)
         {
             _module = module;
@@ -62,12 +60,10 @@ namespace GitCommands
         {
         }
 
-
         /// <summary>
         /// Gets the collection of all currently registered commit templates provided by plugins.
         /// </summary>
         public IEnumerable<CommitTemplateItem> RegisteredTemplates => RegisteredTemplatesDic.Select(item => new CommitTemplateItem(item.Key, item.Value()));
-
 
         /// <summary>
         /// Loads commit template from the file specified in .git/config
@@ -104,10 +100,6 @@ namespace GitCommands
         /// <param name="templateText">The body of the template.</param>
         public void Register(string templateName, Func<string> templateText)
         {
-            if (RegisteredTemplatesDic.ContainsKey(templateName))
-            {
-                return;
-            }
             RegisteredTemplatesDic.TryAdd(templateName, templateText);
         }
 
@@ -117,8 +109,7 @@ namespace GitCommands
         /// <param name="templateName">The name of the template.</param>
         public void Unregister(string templateName)
         {
-            Func<string> notUsed;
-            RegisteredTemplatesDic.TryRemove(templateName, out notUsed);
+            RegisteredTemplatesDic.TryRemove(templateName, out _);
         }
     }
 }

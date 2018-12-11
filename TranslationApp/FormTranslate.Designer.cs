@@ -232,7 +232,6 @@ namespace TranslationApp
             // 
             // translateCategories
             // 
-            this.translateCategories.DisplayMember = "Name";
             this.translateCategories.Dock = System.Windows.Forms.DockStyle.Fill;
             this.translateCategories.FormattingEnabled = true;
             this.translateCategories.ItemHeight = 23;
@@ -293,7 +292,6 @@ namespace TranslationApp
             // 
             // categoryDataGridViewTextBoxColumn
             // 
-            this.categoryDataGridViewTextBoxColumn.DataPropertyName = "Category";
             this.categoryDataGridViewTextBoxColumn.HeaderText = "Category";
             this.categoryDataGridViewTextBoxColumn.Name = "categoryDataGridViewTextBoxColumn";
             this.categoryDataGridViewTextBoxColumn.ReadOnly = true;
@@ -301,7 +299,6 @@ namespace TranslationApp
             // 
             // nameDataGridViewTextBoxColumn
             // 
-            this.nameDataGridViewTextBoxColumn.DataPropertyName = "Name";
             this.nameDataGridViewTextBoxColumn.HeaderText = "Name";
             this.nameDataGridViewTextBoxColumn.Name = "nameDataGridViewTextBoxColumn";
             this.nameDataGridViewTextBoxColumn.ReadOnly = true;
@@ -309,7 +306,6 @@ namespace TranslationApp
             // 
             // propertyDataGridViewTextBoxColumn
             // 
-            this.propertyDataGridViewTextBoxColumn.DataPropertyName = "Property";
             this.propertyDataGridViewTextBoxColumn.HeaderText = "Property";
             this.propertyDataGridViewTextBoxColumn.Name = "propertyDataGridViewTextBoxColumn";
             this.propertyDataGridViewTextBoxColumn.ReadOnly = true;
@@ -318,7 +314,6 @@ namespace TranslationApp
             // neutralValueDataGridViewTextBoxColumn
             // 
             this.neutralValueDataGridViewTextBoxColumn.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.Fill;
-            this.neutralValueDataGridViewTextBoxColumn.DataPropertyName = "NeutralValue";
             this.neutralValueDataGridViewTextBoxColumn.HeaderText = "NeutralValue";
             this.neutralValueDataGridViewTextBoxColumn.Name = "neutralValueDataGridViewTextBoxColumn";
             this.neutralValueDataGridViewTextBoxColumn.ReadOnly = true;
@@ -327,7 +322,6 @@ namespace TranslationApp
             // translatedValueDataGridViewTextBoxColumn
             // 
             this.translatedValueDataGridViewTextBoxColumn.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.Fill;
-            this.translatedValueDataGridViewTextBoxColumn.DataPropertyName = "TranslatedValue";
             this.translatedValueDataGridViewTextBoxColumn.HeaderText = "TranslatedValue";
             this.translatedValueDataGridViewTextBoxColumn.Name = "translatedValueDataGridViewTextBoxColumn";
             this.translatedValueDataGridViewTextBoxColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
@@ -391,7 +385,6 @@ namespace TranslationApp
             this.translatedText.Name = "translatedText";
             this.translatedText.Size = new System.Drawing.Size(556, 117);
             this.translatedText.TabIndex = 14;
-            this.translatedText.TextBoxFont = new System.Drawing.Font("Segoe UI", 10.2F);
             this.translatedText.TextChanged += new System.EventHandler(this.translatedText_TextChanged);
             this.translatedText.Enter += new System.EventHandler(this.translatedText_Enter);
             this.translatedText.KeyDown += new System.Windows.Forms.KeyEventHandler(this.translatedText_KeyDown);

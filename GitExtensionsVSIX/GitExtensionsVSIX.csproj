@@ -20,17 +20,14 @@
     <IncludeDebugSymbolsInLocalVSIXDeployment>true</IncludeDebugSymbolsInLocalVSIXDeployment>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <CopyOutputSymbolsToOutputDirectory>false</CopyOutputSymbolsToOutputDirectory>
+    <!-- Disable the automatic inclusion of Microsoft.VisualStudio.Threading since Visual Studio has a specific version. -->
+    <EnableVisualStudioThreading>false</EnableVisualStudioThreading>
   </PropertyGroup>
   <PropertyGroup>
     <!-- Common debugging support -->
     <StartAction>Program</StartAction>
     <StartProgram>$(DevEnvDir)\devenv.exe</StartProgram>
     <StartArguments>/rootSuffix Exp</StartArguments>
-  </PropertyGroup>
-  <PropertyGroup>
-    <!-- Use the SDK for the current version of Visual Studio -->
-    <VsSdkTargets Condition="'$(VisualStudioVersion)'!=''">$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\VSSDK\Microsoft.VsSDK.targets</VsSdkTargets>
-    <VsSdkTargets Condition="'$(VisualStudioVersion)'==''">$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v10.0\VSSDK\Microsoft.VsSDK.targets</VsSdkTargets>
   </PropertyGroup>
   <PropertyGroup Condition="'$(VisualStudioVersion)' != ''">
     <!-- This is added to prevent forced migrations in Visual Studio 2012 and newer -->
@@ -53,6 +50,8 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
+    <CodeAnalysisRuleSet>..\GitExtensions.ruleset</CodeAnalysisRuleSet>
+    <DocumentationFile>bin\Debug\GitExtensionsVSIX.xml</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -62,11 +61,42 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
+    <CodeAnalysisRuleSet>..\GitExtensions.ruleset</CodeAnalysisRuleSet>
+    <DocumentationFile>bin\Release\GitExtensionsVSIX.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\CommonAssemblyInfo.cs">
       <Link>Properties\CommonAssemblyInfo.cs</Link>
     </Compile>
+    <Compile Include="Commands\About.cs" />
+    <Compile Include="Commands\ApplyPatch.cs" />
+    <Compile Include="Commands\Blame.cs" />
+    <Compile Include="Commands\Browse.cs" />
+    <Compile Include="Commands\Cherry.cs" />
+    <Compile Include="Commands\Clone.cs" />
+    <Compile Include="Commands\CommandBase.cs" />
+    <Compile Include="Commands\Commit.cs" />
+    <Compile Include="Commands\CreateBranch.cs" />
+    <Compile Include="Commands\FileHistory.cs" />
+    <Compile Include="Commands\FindFile.cs" />
+    <Compile Include="Commands\FormatPatch.cs" />
+    <Compile Include="Commands\GitBash.cs" />
+    <Compile Include="Commands\GitIgnore.cs" />
+    <Compile Include="Commands\Init.cs" />
+    <Compile Include="Commands\ItemCommandBase.cs" />
+    <Compile Include="Commands\Merge.cs" />
+    <Compile Include="Commands\OpenWithDifftool.cs" />
+    <Compile Include="Commands\Pull.cs" />
+    <Compile Include="Commands\Push.cs" />
+    <Compile Include="Commands\Rebase.cs" />
+    <Compile Include="Commands\Remotes.cs" />
+    <Compile Include="Commands\Revert.cs" />
+    <Compile Include="Commands\Settings.cs" />
+    <Compile Include="Commands\SolveMergeConflicts.cs" />
+    <Compile Include="Commands\Stash.cs" />
+    <Compile Include="Commands\SwitchBranch.cs" />
+    <Compile Include="Commands\ToolbarCommand.cs" />
+    <Compile Include="Commands\ViewChanges.cs" />
     <Compile Include="Commands\VsixCommandBase.cs" />
     <Compile Include="GitExtCommands.cs" />
     <Compile Include="GitExtCommandTable.cs">
@@ -75,6 +105,8 @@
       <DependentUpon>GitExtCommandTable.vsct</DependentUpon>
     </Compile>
     <Compile Include="GitExtensionsPackage.cs" />
+    <Compile Include="Git\GitCommands.cs" />
+    <Compile Include="PluginHelpers.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="source.extension.cs">
       <DependentUpon>source.extension.vsixmanifest</DependentUpon>
@@ -87,7 +119,6 @@
       <IncludeInVSIX>true</IncludeInVSIX>
     </Content>
     <Content Include="source.extension.ico" />
-    <None Include="packages.config" />
     <None Include="source.extension.vsixmanifest">
       <SubType>Designer</SubType>
       <Generator>VsixManifestGenerator</Generator>
@@ -95,13 +126,13 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="..\Bin\Logo\git-extensions-logo-final-256.png">
-      <Link>Resources\git-extensions-logo-final-256.png</Link>
+    <Content Include="..\Logo\git-extensions-logo-256px.png">
+      <Link>Resources\git-extensions-logo-256px.png</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <IncludeInVSIX>true</IncludeInVSIX>
     </Content>
-    <Content Include="..\Bin\Logo\git-extensions-logo-final-32.png">
-      <Link>Resources\git-extensions-logo-final-32.png</Link>
+    <Content Include="..\Logo\git-extensions-logo-32px.png">
+      <Link>Resources\git-extensions-logo-32px.png</Link>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <IncludeInVSIX>true</IncludeInVSIX>
     </Content>
@@ -114,66 +145,27 @@
     </VSCTCompile>
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="envdte, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <EmbedInteropTypes>False</EmbedInteropTypes>
-      <HintPath>..\packages\VSSDK.DTE.7.0.4\lib\net20\envdte.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="envdte80, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <EmbedInteropTypes>False</EmbedInteropTypes>
-      <HintPath>..\packages\VSSDK.DTE.8.8.0.4\lib\net20\envdte80.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="Microsoft.VisualStudio.OLE.Interop, Version=7.1.40304.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <HintPath>..\packages\VSSDK.OLE.Interop.7.0.4\lib\net20\Microsoft.VisualStudio.OLE.Interop.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.VisualStudio.Shell.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-      <HintPath>..\packages\VSSDK.Shell.10.10.0.4\lib\net40\Microsoft.VisualStudio.Shell.10.0.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.VisualStudio.Shell.Immutable.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-      <HintPath>..\packages\VSSDK.Shell.Immutable.10.10.0.4\lib\net40\Microsoft.VisualStudio.Shell.Immutable.10.0.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.VisualStudio.Shell.Interop, Version=7.1.40304.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <HintPath>..\packages\VSSDK.Shell.Interop.7.0.4\lib\net20\Microsoft.VisualStudio.Shell.Interop.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.VisualStudio.Shell.Interop.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-      <EmbedInteropTypes>False</EmbedInteropTypes>
-      <HintPath>..\packages\VSSDK.Shell.Interop.10.10.0.4\lib\net20\Microsoft.VisualStudio.Shell.Interop.10.0.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.VisualStudio.Shell.Interop.8.0, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <HintPath>..\packages\VSSDK.Shell.Interop.8.8.0.4\lib\net20\Microsoft.VisualStudio.Shell.Interop.8.0.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.VisualStudio.Shell.Interop.9.0, Version=9.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <HintPath>..\packages\VSSDK.Shell.Interop.9.9.0.4\lib\net20\Microsoft.VisualStudio.Shell.Interop.9.0.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.VisualStudio.TextManager.Interop, Version=7.1.40304.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <HintPath>..\packages\VSSDK.TextManager.Interop.7.0.4\lib\net20\Microsoft.VisualStudio.TextManager.Interop.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.VisualStudio.TextManager.Interop.8.0, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <HintPath>..\packages\VSSDK.TextManager.Interop.8.8.0.4\lib\net20\Microsoft.VisualStudio.TextManager.Interop.8.0.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="PresentationCore" />
-    <Reference Include="PresentationFramework" />
-    <Reference Include="stdole, Version=7.0.3300.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <EmbedInteropTypes>False</EmbedInteropTypes>
-      <HintPath>..\packages\VSSDK.DTE.7.0.4\lib\net20\stdole.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Design" />
-    <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
-    <Reference Include="WindowsBase" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="EnvDTE" Version="8.0.2" />
+    <PackageReference Include="Microsoft.VisualStudio.Shell.14.0" Version="14.0.23205" />
+    <PackageReference Include="Microsoft.VisualStudio.Shell.Interop.10.0" Version="10.0.30319" />
+    <PackageReference Include="Microsoft.VisualStudio.SDK.Analyzers" Version="15.7.7" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="15.1.192" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <COMReference Include="Microsoft.VisualStudio.CommandBars">
+      <Guid>{1CBA492E-7263-47BB-87FE-639000619B15}</Guid>
+      <VersionMajor>8</VersionMajor>
+      <VersionMinor>0</VersionMinor>
+      <Lcid>0</Lcid>
+      <WrapperTool>tlbimp</WrapperTool>
+      <Isolated>False</Isolated>
+      <EmbedInteropTypes>True</EmbedInteropTypes>
+    </COMReference>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="source.extension.resx">
@@ -184,19 +176,6 @@
       <ManifestResourceName>VSPackage</ManifestResourceName>
     </EmbeddedResource>
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\GitPluginShared\GitPluginShared.csproj">
-      <Project>{c0a7b025-b7ee-477a-bac7-a6365e7bd893}</Project>
-      <Name>GitPluginShared</Name>
-    </ProjectReference>
-  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Condition="Exists($(VsSdkTargets))" Project="$(VsSdkTargets)" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
+  <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" Condition="Exists('$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets')" />
 </Project>
