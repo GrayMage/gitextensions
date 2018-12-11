@@ -1,10 +1,10 @@
-﻿namespace CommitTemplateInferrer.Classes
-{
-    using System.Windows.Forms;
-    using GitUI;
-    using GitUI.CommandsDialogs;
-    using GitUI.SpellChecker;
+﻿using System.Windows.Forms;
+using GitUI;
+using GitUI.CommandsDialogs;
+using GitUI.SpellChecker;
 
+namespace CommitTemplateInferrer.Classes
+{
     public class FormCommitWrapper : Wrapper<FormCommit>
     {
         public FormCommitWrapper(GitUICommands gitUiCommands, string scriptExecutorPath, string scriptFilePath) : base(new FormCommit(gitUiCommands))

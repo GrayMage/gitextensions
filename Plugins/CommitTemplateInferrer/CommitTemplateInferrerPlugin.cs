@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.ComponentModel.Composition;
 using System.Windows.Forms;
 using CommitTemplateInferrer.Classes;
 using GitUI;
@@ -7,6 +8,7 @@ using ResourceManager;
 
 namespace CommitTemplateInferrer
 {
+    [Export(typeof(IGitPlugin))]
     public class CommitTemplateInferrerPlugin : GitPluginBase, IGitPluginForRepository
     {
         private readonly StringSetting _scriptExecutorPathSetting =
@@ -46,7 +48,7 @@ namespace CommitTemplateInferrer
             };
         }
 
-        public override bool Execute(GitUIBaseEventArgs gitUiCommands)
+        public override bool Execute(GitUIEventArgs args)
         {
             MessageBox.Show(@"This plugin is like a passive ability - no need to execute");
             return true;

@@ -31,7 +31,9 @@ namespace CommitTemplateInferrer.Classes
             var commitMsgPath = EnsurePathQuotation($"{gitWorkingDir}\\COMMITMESSAGE");
 
             if (force)
+            {
                 File.Delete(commitMsgPath);
+            }
 
             new ShellScript(_scriptExecutorPath,
                     string.IsNullOrWhiteSpace(_scriptFilePath)
@@ -40,7 +42,10 @@ namespace CommitTemplateInferrer.Classes
                 .Execute(commitMsgPath);
 
             var newMessage = CommitHelper.GetCommitMessage(_gitModule);
-            if (PreviousMessage != newMessage) PreviousMessage = Message;
+            if (PreviousMessage != newMessage)
+            {
+                PreviousMessage = Message;
+            }
 
             Message = newMessage;
         }
